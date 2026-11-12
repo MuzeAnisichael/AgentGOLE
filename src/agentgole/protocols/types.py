@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from time import time
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -95,6 +95,11 @@ class Event(BaseModel):
     run_id: str
     ts: float = Field(default_factory=time)
     step: int | None = None
+
+    # These fields exist only on the event kinds that carry them.
+    if TYPE_CHECKING:
+
+        def __getattr__(self, name: str) -> Any: ...
 
 
 class Step(BaseModel):
