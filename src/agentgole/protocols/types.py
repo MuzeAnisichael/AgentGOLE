@@ -24,7 +24,7 @@ class Message(BaseModel):
 
     role: Literal["system", "user", "assistant", "tool"]
     content: str | None = None
-    tool_calls: list[ToolCall] = Field(default_factory=list)
+    tool_calls: list[ToolCall] = Field(default_factory=list[ToolCall])
     tool_call_id: str | None = None
     name: str | None = None
     reasoning: str | None = None
@@ -99,6 +99,10 @@ class Event(BaseModel):
     # These fields exist only on the event kinds that carry them.
     if TYPE_CHECKING:
 
+        def __init__(
+            self, *, type: str, run_id: str, ts: float = ..., step: int | None = None, **data: Any
+        ) -> None: ...
+
         def __getattr__(self, name: str) -> Any: ...
 
 
@@ -108,15 +112,15 @@ class Step(BaseModel):
     turn: int
     action: Literal["model", "tool", "finish"]
     output: str | None = None
-    calls: list[ToolCall] = Field(default_factory=list)
-    results: list[ToolResult] = Field(default_factory=list)
+    calls: list[ToolCall] = Field(default_factory=list[ToolCall])
+    results: list[ToolResult] = Field(default_factory=list[ToolResult])
     duration: float = 0.0
 
 
 class Trace(BaseModel):
     """The events of a run up to its terminal result."""
 
-    events: list[Event] = Field(default_factory=list)
+    events: list[Event] = Field(default_factory=list[Event])
 
     def show(self) -> None:
         """Print the recorded run as a plain-text tree."""
@@ -146,7 +150,7 @@ class RunState(BaseModel):
     messages: list[Message]
     turn: int = 0
     scratch: dict[str, Any] = Field(default_factory=dict)
-    history: list[Step] = Field(default_factory=list)
+    history: list[Step] = Field(default_factory=list[Step])
     last_response: Message | None = None
 
 

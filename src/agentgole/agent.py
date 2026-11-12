@@ -72,7 +72,7 @@ class Agent:
             raise ConfigError(str(exc)) from exc
         self._max_steps = max_steps
         self._timeout = timeout
-        self._mode = tool_mode
+        self._mode: ToolMode | None = tool_mode
         self._verbose = verbose
         self._listeners: dict[str, list[EventCallback]] = {}
 

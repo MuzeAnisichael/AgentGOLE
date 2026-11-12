@@ -6,6 +6,7 @@ from threading import Event
 import pytest
 from pydantic import BaseModel, ValidationError
 
+from agentgole.protocols.types import ToolSpec
 from agentgole.tools import builtins, resolve_tools, tool
 
 
@@ -118,3 +119,26 @@ def test_tool_resolution_rejects_unknown_or_ambiguous_names():
     existing = resolve_tools(["calculator"])["calculator"]
     with pytest.raises(ValueError, match="Duplicate"):
         resolve_tools(iter([existing, "calculator"]))
+
+
+async def test_external_tool_validates_then_times_out(monkeypatch):
+    class Waiting:
+        spec = ToolSpec(
+            name="wait",
+            description="Wait.",
+            parameters={
+                "type": "object",
+                "$comment": "Annotations do not restrict arguments.",
+                "required": ["signal"],
+            },
+        )
+
+        async def call(self, **arguments):
+            await asyncio.Event().wait()
+
+    monkeypatch.setattr("agentgole.tools._DEFAULT_TIMEOUT", 0.01)
+    wrapped = resolve_tools([Waiting()])["wait"]
+    with pytest.raises(ValueError, match="missing"):
+        await wrapped.call()
+    with pytest.raises(TimeoutError):
+        await wrapped.call(signal=True)

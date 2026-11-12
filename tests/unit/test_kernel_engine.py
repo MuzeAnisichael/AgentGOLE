@@ -40,7 +40,7 @@ class Echo:
     async def call(self, **arguments: Any) -> Any:
         value = arguments["value"]
         if value is None:
-            raise ValueError("missing value")
+            raise ValueError("missing value " + "!" * 9000)
         return value
 
 
@@ -165,6 +165,7 @@ async def test_batch_observation_includes_errors_and_truncated_output():
     assert "Error: ToolError: Unknown tool 'absent'" in text
     failed, missing, large = result.steps[0].results
     assert failed.error and missing.error and large.error is None
+    assert len(failed.output) == 8000 and failed.output.endswith("...[truncated]")
     assert len(large.output) == 8000 and large.output.endswith("...[truncated]")
 
 

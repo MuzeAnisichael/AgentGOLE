@@ -32,8 +32,9 @@ def _documentation(fn: Callable[..., Any]) -> tuple[str, dict[str, str]]:
             parameter = None
         elif (match := _PARAMETER.fullmatch(stripped)) and match[1] in names:
             in_args = True
-            parameter = match[1]
-            descriptions[parameter] = match[2]
+            parameter = match.group(1)
+            assert parameter is not None
+            descriptions[parameter] = match.group(2)
         elif in_args and stripped and not line[:1].isspace():
             break
         elif parameter and stripped:

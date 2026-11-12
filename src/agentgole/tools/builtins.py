@@ -42,7 +42,11 @@ def _math_name(node: ast.expr) -> str:
 
 
 def _evaluate(node: ast.expr) -> int | float:
-    if isinstance(node, ast.Constant) and type(node.value) in (int, float):
+    if (
+        isinstance(node, ast.Constant)
+        and isinstance(node.value, (int, float))
+        and not isinstance(node.value, bool)
+    ):
         return node.value
     if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
         return -_evaluate(node.operand)

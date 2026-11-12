@@ -1,5 +1,7 @@
 """CLI setup, connectivity reports and streamed conversations."""
 
+import os
+
 import httpx
 
 from agentgole import cli
@@ -57,3 +59,11 @@ def test_chat_loads_target_streams_and_resets(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr("builtins.input", lambda _: next(replies))
     assert cli.main(["chat", f"{target}:agent"]) == 0
     assert capsys.readouterr().out.splitlines() == ["hello", "已开始新会话。", "fresh"]
+
+
+def test_chat_model_available_while_importing_target(tmp_path, monkeypatch):
+    target = tmp_path / "default_agent.py"
+    target.write_text("from agentgole import Agent\nagent = Agent()\n")
+    monkeypatch.setattr("builtins.input", lambda _: "/exit")
+    assert cli.main(["chat", "--model", "ollama/demo", f"{target}:agent"]) == 0
+    assert "GOLE_MODEL" not in os.environ

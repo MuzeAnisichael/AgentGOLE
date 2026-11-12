@@ -23,29 +23,35 @@ class _Binding:
 
     def __init__(self, client: ModelClient, mode: ToolMode):
         self.client = client
-        self.mode = mode
+        self.mode: ToolMode = mode
         self.rejected_tools = False
-        self._probe: Future[Capabilities] | None = None
+        self._probe: Future[Capabilities | None] | None = None
         self._lock = Lock()
 
     async def capabilities(self) -> Capabilities:
-        with self._lock:
-            pending = self._probe
-            if pending is None:
-                pending = self._probe = Future()
-                owner = True
-            else:
-                owner = False
-        if owner:
-            try:
-                pending.set_result(await self.client.probe())
-            except BaseException as error:
-                with self._lock:
-                    self._probe = None
-                pending.set_exception(error)
-                raise
-        caps = await asyncio.shield(asyncio.wrap_future(pending))
-        return caps.model_copy(update={"tools": False} if self.rejected_tools else {})
+        while True:
+            with self._lock:
+                pending = self._probe
+                owner = pending is None
+                if pending is None:
+                    pending = self._probe = Future()
+            if owner:
+                try:
+                    pending.set_result(await self.client.probe())
+                except asyncio.CancelledError:
+                    with self._lock:
+                        self._probe = None
+                    # Another run can take ownership with its own time budget.
+                    pending.set_result(None)
+                    raise
+                except BaseException as error:
+                    with self._lock:
+                        self._probe = None
+                    pending.set_exception(error)
+                    raise
+            caps = await asyncio.shield(asyncio.wrap_future(pending))
+            if caps is not None:
+                return caps.model_copy(update={"tools": False} if self.rejected_tools else {})
 
     def downgrade(self) -> None:
         self.rejected_tools = True

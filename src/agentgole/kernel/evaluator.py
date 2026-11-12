@@ -107,7 +107,7 @@ async def call_tools(action: CallTool, ctx: StepContext, events: RunEvents) -> l
             output = _serialize(await tool.call(**call.arguments))
         except Exception as exc:  # noqa: BLE001 - tool failures become observations
             error = f"{type(exc).__name__}: {exc}"
-            output = f"Error: {error}"
+            output = _serialize(f"Error: {error}")
         results.append(ToolResult(call_id=call.id, name=call.name, output=output, error=error))
         await events.send(
             "tool_result",

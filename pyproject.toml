@@ -20,6 +20,7 @@ dev = ["pytest", "pytest-asyncio", "ruff", "pyright"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+include = ["*.py", "*.pyi", "pyproject.toml"]
 extend-exclude = [".worktrees", ".dev-tools", ".uv-cache"]
 
 [tool.pyright]
@@ -34,4 +35,5 @@ venv = ".venv"
 testpaths = ["tests"]
 addopts = '-m "not live"'
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 markers = ["live: requires a real model endpoint"]

@@ -1,15 +1,43 @@
 """Acceptance tests for the public agent and model entry points."""
 
+import asyncio
 import json
 import os
 import subprocess
 import sys
 
 import httpx
+import pytest
 
 import agentgole as gole
 from agentgole import model as model_module
 from agentgole.testing import FakeModel
+
+
+async def test_waiting_run_takes_over_cancelled_capability_probe(monkeypatch):
+    probing = asyncio.Event()
+    waiting = asyncio.Event()
+
+    class InterruptedProbe(FakeModel):
+        async def probe(self):
+            if not probing.is_set():
+                probing.set()
+                await asyncio.Event().wait()
+            return await super().probe()
+
+    fake = InterruptedProbe(["survived"])
+    monkeypatch.setattr(model_module, "create_client", lambda *a, **kw: fake)
+    model = gole.Model("ollama/test")
+    owner = asyncio.create_task(gole.Agent(model).arun("first"))
+    await probing.wait()
+    second = gole.Agent(model)
+    second.on("run_start")(lambda _: waiting.set())
+    survivor = asyncio.create_task(second.arun("next"))
+    await waiting.wait()
+    owner.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await owner
+    assert (await asyncio.wait_for(survivor, 2)).text == "survived"
 
 
 def test_session_history_and_stateless_runs():

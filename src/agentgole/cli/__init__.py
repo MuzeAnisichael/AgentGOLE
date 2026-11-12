@@ -1,6 +1,7 @@
 """The gole init, doctor and chat commands."""
 
 import argparse
+import os
 import re
 import runpy
 import sys
@@ -63,23 +64,31 @@ async def _doctor() -> int:
     return int(failed)
 
 
-def _load_agent(target: str) -> Agent:
+def _load_agent(target: str, model: str | None) -> Agent:
     path, separator, attr = target.rpartition(":")
     if not separator or not attr or not Path(path).is_file():
         raise ConfigError(msg.BAD_TARGET)
     directory = str(Path(path).resolve().parent)
     sys.path.insert(0, directory)
+    previous = os.environ.get("GOLE_MODEL")
     try:
+        if model:
+            os.environ["GOLE_MODEL"] = model
         value = runpy.run_path(path).get(attr)
     finally:
         sys.path.remove(directory)
+        if model:
+            if previous is None:
+                os.environ.pop("GOLE_MODEL", None)
+            else:
+                os.environ["GOLE_MODEL"] = previous
     if not isinstance(value, Agent):
         raise ConfigError(msg.BAD_TARGET)
     return value
 
 
 def _chat(target: str | None, model: str | None) -> int:
-    agent = _load_agent(target) if target else Agent(model)
+    agent = _load_agent(target, model) if target else Agent(model)
     if target and model:
         agent = copy(agent)
         agent._binding = Model(model)._binding

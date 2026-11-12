@@ -215,7 +215,7 @@ async def test_status_errors_redact_credentials_and_identify_explicit_tool_rejec
         [
             (401, f"wrong key: {credential}"),
             (400, "invalid parameter type in tools"),
-            (400, "Model does not support tools"),
+            (400, "This model does not support the tools parameter"),
         ]
     )
 

@@ -8,6 +8,7 @@ import httpx
 import pytest
 
 import agentgole as gole
+from agentgole.config import load_config
 
 pytestmark = pytest.mark.live
 EXAMPLES = Path(__file__).resolve().parents[2] / "examples"
@@ -17,12 +18,14 @@ DEEPSEEK = "deepseek/deepseek-chat"
 
 @pytest.fixture(scope="session")
 def ollama_ready():
+    provider = load_config().get("providers", {}).get("ollama", {})
+    host = provider.get("base_url", "http://localhost:11434").rstrip("/").removesuffix("/v1")
     try:
-        response = httpx.get("http://localhost:11434/api/tags", timeout=4, trust_env=False)
+        response = httpx.get(f"{host}/api/tags", timeout=4, trust_env=False)
         response.raise_for_status()
         names = {entry["name"] for entry in response.json()["models"]}
     except (httpx.HTTPError, KeyError, TypeError, ValueError) as exc:
-        return False, f"Ollama is unavailable at localhost:11434 ({type(exc).__name__})."
+        return False, f"The configured Ollama endpoint is unavailable ({type(exc).__name__})."
     return "qwen3:8b" in names, "Install the live model with 'ollama pull qwen3:8b'."
 
 

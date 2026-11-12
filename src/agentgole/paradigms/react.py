@@ -7,7 +7,7 @@ from uuid import uuid4
 
 from ..protocols import StepContext
 from ..protocols.types import Action, CallModel, CallTool, Finish, Message, RunState, ToolCall
-from ._schema import validate_arguments
+from ..tools._schema import validate_arguments
 
 _FINAL = "Final Answer:"
 _PROTOCOL = """Available tools (name, description, and JSON argument schema):

@@ -17,7 +17,7 @@ from .wire import completed_response, stream_response, wire_message
 _TOOL_PARAM = r"(?:tools|tool[_ -]calling|function[_ -]calling|functions)"
 _UNSUPPORTED_TOOLS = re.compile(
     rf"(?:does(?:n't| not) support|cannot use|unsupported (?:parameter:? )?|"
-    rf"unrecognized request argument supplied:|unknown parameter:?)\s*['`\"]?{_TOOL_PARAM}\b"
+    rf"unrecognized request argument supplied:|unknown parameter:?)\s*(?:the\s+)?['`\"]?{_TOOL_PARAM}\b"
     rf"|\b{_TOOL_PARAM}['`\"]?\s+(?:(?:is|are)\s+)?(?:not supported|unsupported|not available)",
     re.IGNORECASE,
 )

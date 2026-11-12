@@ -17,12 +17,16 @@ _TYPES = {
 }
 _KEYWORDS = {
     "$schema",
+    "$comment",
     "$defs",
     "definitions",
     "title",
     "description",
     "default",
     "examples",
+    "deprecated",
+    "readOnly",
+    "writeOnly",
     "$ref",
     "type",
     "enum",
