@@ -1,0 +1,15 @@
+.venv/
+.dev-tools/
+.worktrees/
+.uv-cache/
+.pytest_cache/
+.ruff_cache/
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.env
+.env.*
+gole.yaml
+agent_example.py

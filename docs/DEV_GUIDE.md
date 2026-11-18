@@ -186,8 +186,11 @@ T{n}：完成 / 部分完成 / 受阻
 ## 5. Git 规范
 
 - 分支：`v0.X`，从上一版审核通过后的提交切出。
-- 提交：每张任务卡一个提交，格式为 `feat(kernel): add async run loop`、`fix(models): ...`、`test(tools): ...`。
-- `CHANGELOG.md`：每版在 `## [Unreleased]` 下按 Added / Changed / Fixed 写条目；破坏性变更以 **BREAKING** 开头。
+- 提交：每张任务卡至少一个提交。
+  - 标题用 Conventional Commits，末尾加任务编号，例如 `feat(memory): add rolling summary memory [T2]`。
+  - 正文用 2–5 行列出要点：做了什么、有哪些取舍。
+  - 遗留修复、评审修改和返工，每条一个提交，编号分别用 `[R1]`、`[RV3]`、`[RW2]` 的形式；不要把多条修改合并进一个「集成修复」提交。
+- `CHANGELOG.md`：每版在 `## [Unreleased]` 下按 Added / Changed / Fixed 写条目，写到功能级：新增的公共 API、CLI 命令、行为变化、已知限制，每条一行；破坏性变更以 **BREAKING** 开头。
 - 不打 tag、不合并到 main、不改 `docs/`，这些由项目负责人和审核方处理。
 
 ---

@@ -126,6 +126,7 @@ agentgole/
 
 目标：带记忆的助理和本地文档问答全离线可用。
 
+- [ ] v0.1 审核遗留修复 R1–R5（见 `reports/v0.1-review.md`）
 - [ ] `memory/summary.py`：滚动摘要，可单独指定小模型
 - [ ] `memory/longterm.py`：SQLite 长期记忆，支持 `write="after_run"` 与 `"tool"` 两种写入时机
 - [ ] `memory/layered.py` 与 `memory="long"` 预设；`add` / `search` / `export` / `clear`
