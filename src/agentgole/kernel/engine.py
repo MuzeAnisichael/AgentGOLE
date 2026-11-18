@@ -3,11 +3,14 @@
 import asyncio
 from collections.abc import Awaitable, Callable, Sequence
 from time import monotonic
+from typing import Any
 
-from ..errors import MaxStepsError, RunTimeoutError, UnsupportedToolsError
+from .._json import OutputSchema
+from ..errors import MaxStepsError, OutputValidationError, RunTimeoutError, UnsupportedToolsError
 from ..paradigms import Auto, React
 from ..protocols import EventSink, Memory, Paradigm, Retriever, StepContext
 from ..protocols.types import (
+    Action,
     CallModel,
     CallTool,
     Finish,
@@ -33,15 +36,20 @@ async def _actions(
     streaming: bool,
     retrievers: Sequence[Retriever],
     knowledge_mode: str,
-) -> tuple[str, Usage]:
+    schema: OutputSchema | None,
+) -> tuple[str, Usage, Any]:
     usage = Usage()
+    corrections = 0
+    next_action: Action | None = None
+    validated: Any = None
     # Tool requests and custom paradigms can replace intermediate prose at Finish.
-    direct = type(paradigm) in (Auto, React) and not ctx.tools
+    direct = type(paradigm) in (Auto, React) and not ctx.tools and schema is None
     pending_tokens: list[str] | None = None if direct else []
 
     while state.turn < max_steps:
         events.step = state.turn + 1
-        action = await paradigm.step(state, ctx)
+        action = next_action or await paradigm.step(state, ctx)
+        next_action = None
         started = monotonic()
         thought: str | None = None
         if isinstance(action, CallModel):
@@ -66,6 +74,8 @@ async def _actions(
             state.last_response = response.message
             usage += response.usage
             thought = response.message.reasoning
+            if corrections:
+                next_action = Finish(output=response.message.content or "")
             step = Step(
                 turn=events.step,
                 action="model",
@@ -77,7 +87,23 @@ async def _actions(
             append_results(state, results, action.as_observation)
             step = Step(turn=events.step, action="tool", calls=action.calls, results=results)
         else:
-            if streaming and pending_tokens is not None:
+            if schema is not None:
+                try:
+                    validated = schema.validate(action.output)
+                except (ValueError, SyntaxError, TypeError) as exc:
+                    if corrections == 2:
+                        raise OutputValidationError(
+                            f"Invalid output after three attempts: {exc}"
+                        ) from exc
+                    corrections += 1
+                    state.messages.append(
+                        Message(
+                            role="user",
+                            content=f"Invalid output: {exc}. Return only the corrected JSON value.",
+                        )
+                    )
+                    next_action = CallModel(use_tools=False)
+            if streaming and next_action is None and pending_tokens is not None:
                 pieces = (
                     pending_tokens if "".join(pending_tokens) == action.output else [action.output]
                 )
@@ -89,9 +115,9 @@ async def _actions(
         state.turn = step.turn
         state.history.append(step)
         await events.send("step", action=step.action, thought=thought)
-        if isinstance(action, Finish):
+        if isinstance(action, Finish) and next_action is None:
             events.step = None
-            return action.output, usage
+            return action.output, usage, validated
     raise MaxStepsError(f"Action limit ({max_steps}) reached. Increase max_steps to continue.")
 
 
@@ -107,6 +133,7 @@ async def execute(
     timeout: float | None,
     streaming: bool,
     emit: EventSink,
+    output: type | None = None,
     retrievers: Sequence[Retriever] = (),
     knowledge_mode: str = "auto",
     resolve_mode: Callable[[], Awaitable[ResolvedMode]] | None = None,
@@ -125,12 +152,29 @@ async def execute(
                 if memory is not None:
                     loaded = await memory.load(session, query=input)
                     await events.send("memory_load", messages=list(loaded))
+                schema = OutputSchema(output) if output is not None else None
+                if schema is not None:
+                    instructions = (
+                        f"{instructions}\n\n{schema.instruction}"
+                        if instructions
+                        else schema.instruction
+                    )
                 state = initial_state(input, instructions, loaded)
+                if schema is not None:
+                    state.scratch["structured_output"] = True
                 if resolve_mode is not None:
                     ctx.tool_mode = await resolve_mode()
                 await prepare_knowledge(state, ctx, events, retrievers, knowledge_mode)
-                text, usage = await _actions(
-                    state, paradigm, ctx, events, max_steps, streaming, retrievers, knowledge_mode
+                text, usage, validated = await _actions(
+                    state,
+                    paradigm,
+                    ctx,
+                    events,
+                    max_steps,
+                    streaming,
+                    retrievers,
+                    knowledge_mode,
+                    schema,
                 )
                 if memory is not None:
                     turn = [
@@ -144,6 +188,7 @@ async def execute(
                     text=text,
                     steps=state.history,
                     citations=events.citations,
+                    output=validated,
                     usage=usage,
                     trace=Trace(events=events.trace.events),
                     session=session,

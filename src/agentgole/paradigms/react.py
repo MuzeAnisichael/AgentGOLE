@@ -56,6 +56,8 @@ class React:
             return Finish(output=re.sub(r"^\s*Thought:[^\n]*(?:\n|$)", "", raw).strip())
         try:
             action = parse_object(raw)
+            if state.scratch.get("structured_output") and "tool" not in action:
+                return Finish(output=raw)
             name = action.get("tool")
             if not isinstance(name, str) or name not in ctx.tools:
                 raise ValueError(f"Unknown tool: {name!r}")

@@ -117,22 +117,34 @@ class Agent:
         """Access the configured memory's management methods."""
         return self._memory
 
-    def run(self, input: str, *, session: str = "default") -> Result:
+    def run(self, input: str, *, session: str = "default", output: type | None = None) -> Result:
         """Run to completion and return the result."""
-        return run_sync(self.arun(input, session=session))
+        return run_sync(self.arun(input, session=session, output=output))
 
-    async def arun(self, input: str, *, session: str = "default") -> Result:
+    async def arun(
+        self, input: str, *, session: str = "default", output: type | None = None
+    ) -> Result:
         """Run asynchronously to completion."""
-        return await self._execute(input, session, streaming=False)
+        return await self._execute(input, session, streaming=False, output=output)
 
     def stream(
-        self, input: str, *, session: str = "default", events: list[str] | None = None
+        self,
+        input: str,
+        *,
+        session: str = "default",
+        events: list[str] | None = None,
+        output: type | None = None,
     ) -> Iterator[Event]:
         """Iterate over events as they happen."""
-        return iter_sync(self.astream(input, session=session, events=events))
+        return iter_sync(self.astream(input, session=session, events=events, output=output))
 
     async def astream(
-        self, input: str, *, session: str = "default", events: list[str] | None = None
+        self,
+        input: str,
+        *,
+        session: str = "default",
+        events: list[str] | None = None,
+        output: type | None = None,
     ) -> AsyncIterator[Event]:
         """Iterate asynchronously over events as they happen."""
         queue: asyncio.Queue[Event | None] = asyncio.Queue()
@@ -144,7 +156,7 @@ class Agent:
 
         async def produce() -> None:
             try:
-                await self._execute(input, session, streaming=True, sink=enqueue)
+                await self._execute(input, session, streaming=True, sink=enqueue, output=output)
             finally:
                 queue.put_nowait(None)
 
@@ -167,7 +179,13 @@ class Agent:
         return register
 
     async def _execute(
-        self, input: str, session: str, *, streaming: bool, sink: EventSink | None = None
+        self,
+        input: str,
+        session: str,
+        *,
+        streaming: bool,
+        output: type | None,
+        sink: EventSink | None = None,
     ) -> Result:
         run_id = uuid4().hex
         live = LiveTrace() if self._verbose else None
@@ -213,6 +231,7 @@ class Agent:
             max_steps=self._max_steps,
             timeout=self._timeout,
             streaming=streaming,
+            output=output,
             retrievers=self._retrievers,
             knowledge_mode=self._knowledge_mode,
             emit=emit,

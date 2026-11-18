@@ -5,6 +5,8 @@ import json
 import re
 from typing import Any
 
+from pydantic import TypeAdapter
+
 _TOKENS = re.compile(r"""(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|,(?=\s*[}\]]))""", re.DOTALL)
 
 
@@ -38,3 +40,17 @@ def parse_json(text: str, *, embedded: bool = False) -> Any:
 def parse_object(text: str) -> dict[str, Any]:
     """Read the first action object from a ReAct reply."""
     return parse_json(text, embedded=True)
+
+
+class OutputSchema:
+    """Translate a requested type into a prompt and validate its final value."""
+
+    def __init__(self, output: type):
+        self.adapter: TypeAdapter[Any] = TypeAdapter(output)
+        self.instruction = "最终回答只输出一个符合以下 JSON Schema 的 JSON 值。\n" + json.dumps(
+            self.adapter.json_schema(), ensure_ascii=False
+        )
+
+    def validate(self, text: str) -> Any:
+        """Repair JSON syntax, then validate the decoded value."""
+        return self.adapter.validate_python(parse_json(text))
