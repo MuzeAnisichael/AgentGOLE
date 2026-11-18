@@ -100,7 +100,7 @@ async def test_react_retries_twice_reports_and_finishes_with_raw_reply():
         record(state, Message(role="assistant", content=raw))
         assert isinstance(await react.step(state, ctx), CallModel)
         assert state.messages[-1].role == "user" and "Error:" in (state.messages[-1].content or "")
-    raw = "  no object in the last reply  "
+    raw = "{still invalid"
     record(state, Message(role="assistant", content=raw))
     assert await react.step(state, ctx) == Finish(output=raw)
     assert isinstance(ctx.report_error, AsyncMock)
@@ -150,3 +150,21 @@ async def test_unknown_schema_constraint_is_reported_before_dispatch():
     record(state, Message(role="assistant", content='{"tool":"find","arguments":{}}'))
     assert isinstance(await react.step(state, ctx), CallModel)
     assert "Unsupported tool schema" in (state.messages[-1].content or "")
+
+
+async def test_plain_prompt_reply_finishes_without_corrections():
+    for paradigm in (Auto(), React()):
+        ctx = context()
+        ctx.tools.clear()
+        state = RunState(input="Hi", messages=[])
+        assert await paradigm.step(state, ctx) == CallModel(use_tools=False)
+        record(state, Message(role="assistant", content="Hello"))
+        assert await paradigm.step(state, ctx) == Finish(output="Hello")
+        assert len(state.messages) == 1
+
+    ctx = context()
+    state = RunState(input="Hi", messages=[])
+    react = React()
+    await react.step(state, ctx)
+    record(state, Message(role="assistant", content="Thought: no tool needed\nHello"))
+    assert await react.step(state, ctx) == Finish(output="Hello")

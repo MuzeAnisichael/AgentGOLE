@@ -65,6 +65,10 @@ class React:
     """Use a text protocol with up to two corrective model replies per action."""
 
     async def step(self, state: RunState, ctx: StepContext) -> Action:
+        if not ctx.tools:
+            if state.last_response is None:
+                return CallModel(use_tools=False)
+            return Finish(output=state.last_response.content or "")
         if not state.scratch.get("react_prompt"):
             schema = [tool.spec.model_dump() for tool in ctx.tools.values()]
             prefix = _PROTOCOL.format(tools=json.dumps(schema, ensure_ascii=False))
@@ -80,6 +84,8 @@ class React:
         raw = state.last_response.content or ""
         if _FINAL in raw:
             return Finish(output=raw.split(_FINAL, 1)[1].strip())
+        if "{" not in raw:
+            return Finish(output=re.sub(r"^\s*Thought:[^\n]*(?:\n|$)", "", raw).strip())
         try:
             action = _first_object(raw)
             name = action.get("tool")
