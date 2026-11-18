@@ -5,7 +5,7 @@ import inspect
 import logging
 from collections.abc import AsyncIterator, Callable, Iterable, Iterator
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from uuid import uuid4
 
 from ._sync import iter_sync, run_sync
@@ -213,7 +213,7 @@ class Agent:
         tools = dict(self._tools)
         memory_tools = getattr(self._memory, "tools", None)
         if callable(memory_tools):
-            for item in memory_tools(session=session):
+            for item in cast(Iterable[Tool], memory_tools(session=session)):
                 if item.spec.name in tools:
                     raise ConfigError(f"Duplicate memory tool name: {item.spec.name}")
                 tools[item.spec.name] = item
