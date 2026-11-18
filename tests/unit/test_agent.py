@@ -132,6 +132,7 @@ def audit(event, args):
         raise AssertionError('config read during import')
 sys.addaudithook(audit)
 import agentgole
+assert not ({"pypdf", "docx", "numpy"} & sys.modules.keys())
 """
     result = subprocess.run(
         [sys.executable, "-c", code],

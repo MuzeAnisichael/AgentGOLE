@@ -11,6 +11,7 @@ EXISTS = "文件已存在，请使用 --force 覆盖：{}"
 CREATED = "已生成 gole.yaml 和 agent_example.py"
 NO_MODEL = "请设置 GOLE_MODEL 或运行 gole init。"
 OK = "[ok]   {:<24} 可连接   原生工具调用: {}"
+EMBED_OK = "[ok]   {:<24} 可连接   文本嵌入"
 FAIL = "[fail] {:<24} {}"
 NATIVE = "支持"
 PROMPT_MODE = "不支持 → 将使用提示词模式"
@@ -41,3 +42,9 @@ agent = gole.Agent()
 if __name__ == "__main__":
     print(agent.run("用一句话介绍你自己"))
 """
+
+KB_HELP = "管理本地知识库"
+BUILD_HELP = "按来源增量构建知识库"
+BUILD_STATS = (
+    "文件 {files}，新增块 {added}，跳过块 {skipped}，删除块 {deleted}，耗时 {elapsed:.2f} 秒"
+)

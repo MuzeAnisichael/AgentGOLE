@@ -18,6 +18,7 @@ async def call_model(
     ctx: StepContext,
     streaming: bool,
     events: RunEvents,
+    pending_tokens: list[str] | None,
 ) -> ModelResponse:
     """Generate a reply and emit visible content deltas when streaming."""
     messages = conversation if action.messages is None else action.messages
@@ -30,7 +31,7 @@ async def call_model(
     await events.send("model_start", messages=list(messages), model=ctx.model.name)
     if streaming:
         response = await _stream_model(
-            messages, specs or None, ctx, action.emit_tokens_after, events
+            messages, specs or None, ctx, action.emit_tokens_after, events, pending_tokens
         )
     else:
         response = await ctx.model.generate(messages, tools=specs or None)
@@ -50,9 +51,13 @@ async def _stream_model(
     ctx: StepContext,
     marker: str | None,
     events: RunEvents,
+    pending_tokens: list[str] | None,
 ) -> ModelResponse:
     response = None
     pending = ""
+    trim_answer = bool(marker) and pending_tokens is None
+    started_answer = False
+    trailing = ""
     chunks = ctx.model.stream(messages, tools=specs)
     try:
         async for chunk in chunks:
@@ -69,8 +74,20 @@ async def _stream_model(
                 text = pending[index + len(marker) :]
                 marker = None
                 pending = ""
+            if trim_answer and text:
+                # ReAct strips the answer. Hold whitespace until another word confirms it is internal.
+                text = trailing + text
+                if not started_answer:
+                    text = text.lstrip()
+                visible = text.rstrip()
+                trailing = text[len(visible) :]
+                text = visible
+                started_answer = started_answer or bool(text)
             if text:
-                await events.send("token", text=text)
+                if pending_tokens is None:
+                    await events.send("token", text=text)
+                else:
+                    pending_tokens.append(text)
     finally:
         close = getattr(chunks, "aclose", None)
         if close is not None:
@@ -101,12 +118,14 @@ async def call_tools(action: CallTool, ctx: StepContext, events: RunEvents) -> l
         await events.send("tool_call", tool=call.name, args=call.arguments)
         error = None
         try:
+            if call.invalid_arguments:
+                raise ToolError("invalid arguments JSON")
             tool = ctx.tools.get(call.name)
             if tool is None:
                 raise ToolError(f"Unknown tool '{call.name}'. Choose a registered tool.")
             output = _serialize(await tool.call(**call.arguments))
         except Exception as exc:  # noqa: BLE001 - tool failures become observations
-            error = f"{type(exc).__name__}: {exc}"
+            error = str(exc) if call.invalid_arguments else f"{type(exc).__name__}: {exc}"
             output = _serialize(f"Error: {error}")
         results.append(ToolResult(call_id=call.id, name=call.name, output=output, error=error))
         await events.send(

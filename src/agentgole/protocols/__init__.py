@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict
 from .types import (
     Action,
     Capabilities,
+    Chunk,
     Event,
     Message,
     ModelChunk,
@@ -42,6 +43,38 @@ class Tool(Protocol):
     spec: ToolSpec
 
     async def call(self, **arguments: Any) -> Any: ...
+
+
+class EmbeddingClient(Protocol):
+    """Asynchronously encode batches of texts."""
+
+    name: str
+
+    async def embed(self, texts: list[str]) -> list[list[float]]: ...
+
+
+class Retriever(Protocol):
+    """Retrieve scored passages for a question."""
+
+    name: str
+    description: str
+
+    async def search(self, query: str, k: int = 5) -> list[Chunk]: ...
+
+
+class BindableMemory(Protocol):
+    """Attach the run's model and optional embedding client."""
+
+    def bind(self, model: ModelClient, embedding: EmbeddingClient | None) -> None: ...
+
+
+class ManagedMemory(Protocol):
+    """User-facing synchronous management of durable memory."""
+
+    def add(self, text: str, *, session: str = "default") -> None: ...
+    def search(self, query: str, *, session: str = "default", k: int = 5) -> list[str]: ...
+    def export(self, *, session: str = "default") -> dict[str, Any]: ...
+    def clear(self, *, session: str = "default") -> None: ...
 
 
 class Memory(Protocol):

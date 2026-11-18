@@ -3,9 +3,11 @@
 import json
 from collections.abc import AsyncIterator
 from typing import Any
+from uuid import uuid4
 
 import httpx
 
+from .._json import parse_json
 from ..protocols.types import Message, ModelChunk, ModelResponse, ToolCall, Usage
 
 
@@ -76,8 +78,18 @@ class _Thinking:
 
 def _call(record: dict[str, Any]) -> ToolCall:
     function = record["function"]
+    try:
+        arguments = parse_json((function.get("arguments") or "").strip() or "{}")
+        if not isinstance(arguments, dict):
+            raise TypeError("Expected an argument object")
+        invalid = False
+    except (SyntaxError, ValueError, TypeError):
+        arguments, invalid = {}, True
     return ToolCall(
-        id=record["id"], name=function["name"], arguments=json.loads(function["arguments"])
+        id=record.get("id") or uuid4().hex,
+        name=function["name"],
+        arguments=arguments,
+        invalid_arguments=invalid,
     )
 
 

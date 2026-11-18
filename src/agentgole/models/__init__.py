@@ -34,6 +34,7 @@ def create_client(
     timeout: float = 60.0,
     retries: int = 2,
     transport: httpx.AsyncBaseTransport | None = None,
+    embedding: bool = False,
 ) -> CompatibleClient:
     """Resolve the model alias, provider endpoint and credentials without network I/O."""
     if "/" not in spec and base_url is None:
@@ -46,6 +47,10 @@ def create_client(
         provider, model = "custom", spec
     elif provider not in _ENDPOINTS:
         raise ConfigError(f"Provider {provider!r} is not supported in this version.")
+    if provider == "deepseek" and embedding:
+        raise ConfigError(
+            "DeepSeek does not serve embeddings. Choose another provider, such as Ollama."
+        )
     if not model.strip():
         raise ConfigError("Select a model using provider/model, or run 'gole init'.")
     if retries < 0 or timeout <= 0:

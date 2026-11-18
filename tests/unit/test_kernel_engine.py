@@ -182,9 +182,8 @@ async def test_stream_marker_split_absent_and_unfiltered():
         streaming=True,
     )
     tokens = [e for e in harness.events if e.type == "token"]
-    assert "".join(field(e, "text") for e in tokens if e.step == 1) == "visible"
-    assert not any(e.step == 2 for e in tokens)
-    assert "".join(field(e, "text") for e in tokens if e.step == 3) == "all"
+    assert [field(e, "text") for e in tokens] == ["done"]
+    assert tokens[0].step == 4
     assert model.requests[-1] == {"messages": [], "tools": None}
 
 
@@ -253,3 +252,54 @@ async def test_fatal_exception_and_callback_isolation(caplog):
     assert "broken handler" in caplog.text
     assert [e.type for e in harness.events] == ["run_start", "model_start", "error"]
     assert field(harness.events[-1], "recoverable") is False and harness.downgrades == 0
+
+
+async def test_finish_supplies_token_before_step_if_marker_absent():
+    harness = Harness(FakeModel(["private notes"]))
+    result = await harness.run(
+        Script(CallModel(emit_tokens_after="Final:"), Finish(output="public answer")),
+        streaming=True,
+    )
+    events = harness.events
+    finish = next(i for i, e in enumerate(events) if e.type == "step" and e.action == "finish")
+    assert [(e.type, e.text) for e in events if e.type == "token"] == [("token", result.text)]
+    assert events[finish - 1].type == "token"
+
+
+async def test_malformed_native_arguments_become_one_observation():
+    from agentgole.models.wire import completed_response
+
+    calls = completed_response(
+        {
+            "choices": [
+                {
+                    "message": {
+                        "tool_calls": [
+                            {"function": {"name": "echo", "arguments": text}}
+                            for text in ("", "{'value': 2,}", "broken")
+                        ]
+                    }
+                }
+            ]
+        },
+        "fake",
+    ).message.tool_calls
+    assert len({call.id for call in calls if call.id}) == 3
+    assert [c.arguments for c in calls[:2]] == [{}, {"value": 2}]
+    model = FakeModel(["recovered"])
+    harness = Harness(model)
+    result = await harness.run(
+        Script(CallTool(calls=calls), CallModel(), Finish(output="recovered"))
+    )
+    assert result.steps[0].results[1].output == "2"
+    assert model.requests[0]["messages"][-1].content == "Error: invalid arguments JSON"
+
+
+async def test_memory_receives_current_query():
+    class QueryStore(Store):
+        async def load(self, session, query=None):
+            return [Message(role="system", content=f"{session} / {query}")]
+
+    model = FakeModel(["ok"])
+    await Harness(model).run(Script(CallModel(), Finish(output="ok")), memory=QueryStore())
+    assert model.requests[0]["messages"][1].content == "session1 / request"

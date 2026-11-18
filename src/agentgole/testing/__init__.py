@@ -1,5 +1,6 @@
 """Scripted offline models for tests of public agent behavior."""
 
+import hashlib
 from collections.abc import AsyncIterator, Iterable
 from typing import Any, TypedDict
 from uuid import uuid4
@@ -75,3 +76,23 @@ class FakeModel:
     async def probe(self) -> Capabilities:
         """Return the configured native tool capability."""
         return Capabilities(tools=self._tools_supported)
+
+
+class FakeEmbedding:
+    """Deterministically embed text while recording nonempty batch requests."""
+
+    def __init__(self, dim: int = 16):
+        if dim < 1:
+            raise ValueError("Choose a positive embedding dimension.")
+        self.dim = dim
+        self.name = f"fake-{dim}"
+        self.calls: list[list[str]] = []
+
+    async def embed(self, texts: list[str]) -> list[list[float]]:
+        """Return reproducible vectors, including across processes."""
+        if texts:
+            self.calls.append(list(texts))
+        return [
+            [(byte - 127.5) / 127.5 for byte in hashlib.shake_256(text.encode()).digest(self.dim)]
+            for text in texts
+        ]

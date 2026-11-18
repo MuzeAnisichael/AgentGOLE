@@ -1,10 +1,10 @@
 """Prompt-based reasoning and tool dispatch."""
 
-import ast
 import json
 import re
 from uuid import uuid4
 
+from .._json import parse_object
 from ..protocols import StepContext
 from ..protocols.types import Action, CallModel, CallTool, Finish, Message, RunState, ToolCall
 from ..tools._schema import validate_arguments
@@ -23,38 +23,6 @@ Action:
 To finish, reply in this format:
 Thought: <brief thought>
 Final Answer: <final answer>"""
-_JSON_TOKENS = re.compile(
-    r"""(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[{}]|,(?=\s*[}\]]))""", re.DOTALL
-)
-
-
-def _reject_constant(token: str) -> None:
-    raise ValueError(f"Invalid JSON constant: {token}")
-
-
-def _first_object(text: str) -> dict:
-    start = text.find("{")
-    if start < 0:
-        raise ValueError("Expected a JSON action object or a Final Answer")
-    pieces: list[str] = []
-    depth = 0
-    end = start
-    for match in _JSON_TOKENS.finditer(text, start):
-        token = match[0]
-        pieces.append(text[end : match.start()])
-        end = match.end()
-        if token == ",":
-            continue
-        if token.startswith("'"):
-            token = json.dumps(ast.literal_eval(token))
-        pieces.append(token)
-        if token == "{":
-            depth += 1
-        elif token == "}":
-            depth -= 1
-            if depth == 0:
-                return json.loads("".join(pieces), parse_constant=_reject_constant)
-    raise ValueError("Unclosed JSON action object")
 
 
 def _request() -> CallModel:
@@ -65,6 +33,10 @@ class React:
     """Use a text protocol with up to two corrective model replies per action."""
 
     async def step(self, state: RunState, ctx: StepContext) -> Action:
+        if not ctx.tools:
+            if state.last_response is None:
+                return CallModel(use_tools=False)
+            return Finish(output=state.last_response.content or "")
         if not state.scratch.get("react_prompt"):
             schema = [tool.spec.model_dump() for tool in ctx.tools.values()]
             prefix = _PROTOCOL.format(tools=json.dumps(schema, ensure_ascii=False))
@@ -78,10 +50,20 @@ class React:
         if not state.history or state.history[-1].action != "model" or state.last_response is None:
             return _request()
         raw = state.last_response.content or ""
-        if _FINAL in raw:
+        if state.scratch.get("structured_output"):
+            # JSON data may itself contain protocol markers or a "tool" field.
+            control = re.match(r"(?:\s*Thought:[^\n]*\n)?\s*(Action:|Final Answer:)", raw)
+            if control is None:
+                return Finish(output=raw)
+            if control[1] == _FINAL:
+                return Finish(output=raw[control.end() :].strip())
+            raw = raw[control.end() :]
+        elif _FINAL in raw:
             return Finish(output=raw.split(_FINAL, 1)[1].strip())
+        if "{" not in raw:
+            return Finish(output=re.sub(r"^\s*Thought:[^\n]*(?:\n|$)", "", raw).strip())
         try:
-            action = _first_object(raw)
+            action = parse_object(raw)
             name = action.get("tool")
             if not isinstance(name, str) or name not in ctx.tools:
                 raise ValueError(f"Unknown tool: {name!r}")
