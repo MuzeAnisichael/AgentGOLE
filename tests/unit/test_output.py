@@ -39,3 +39,20 @@ def test_three_failures_raise_validation_error_and_actions_consume_budget():
     assert len(model.requests) == 3
     with pytest.raises(MaxStepsError):
         gole.Agent(FakeModel(["[]"]), max_steps=2).run("extract", output=Paper)
+
+
+def test_prompt_tools_keep_structured_values_and_validation_budget():
+    @gole.tool
+    def hammer() -> str:
+        """Use a hammer."""
+        return "ok"
+
+    raw = '{"tool":"hammer","label":"Final Answer: data"}'
+    model = FakeModel(["Action: " + '{"tool":"hammer","arguments":{}}', raw])
+    result = gole.Agent(model, tools=[hammer], tool_mode="prompt").run("extract", output=dict)
+    assert result.text == raw and result.output["tool"] == "hammer"
+    assert len(model.requests) == 2
+    invalid = FakeModel(["{broken"] * 3)
+    with pytest.raises(OutputValidationError):
+        gole.Agent(invalid, tools=[hammer], tool_mode="prompt").run("extract", output=dict)
+    assert len(invalid.requests) == 3

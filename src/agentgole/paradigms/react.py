@@ -50,14 +50,20 @@ class React:
         if not state.history or state.history[-1].action != "model" or state.last_response is None:
             return _request()
         raw = state.last_response.content or ""
-        if _FINAL in raw:
+        if state.scratch.get("structured_output"):
+            # JSON data may itself contain protocol markers or a "tool" field.
+            control = re.match(r"(?:\s*Thought:[^\n]*\n)?\s*(Action:|Final Answer:)", raw)
+            if control is None:
+                return Finish(output=raw)
+            if control[1] == _FINAL:
+                return Finish(output=raw[control.end() :].strip())
+            raw = raw[control.end() :]
+        elif _FINAL in raw:
             return Finish(output=raw.split(_FINAL, 1)[1].strip())
         if "{" not in raw:
             return Finish(output=re.sub(r"^\s*Thought:[^\n]*(?:\n|$)", "", raw).strip())
         try:
             action = parse_object(raw)
-            if state.scratch.get("structured_output") and "tool" not in action:
-                return Finish(output=raw)
             name = action.get("tool")
             if not isinstance(name, str) or name not in ctx.tools:
                 raise ValueError(f"Unknown tool: {name!r}")
