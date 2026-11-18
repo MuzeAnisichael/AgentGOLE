@@ -1,5 +1,7 @@
 """Keyword and vector ranking for local retrieval."""
 
+from __future__ import annotations
+
 import math
 import re
 from array import array
@@ -51,7 +53,7 @@ class BM25:
         return sorted(scores.items(), key=lambda item: (-item[1], item[0]))[: max(0, k)]
 
 
-def unit_vector(values: list[float]) -> array:
+def unit_vector(values: list[float]) -> array[float]:
     """Encode a finite vector as normalized native float32 values."""
     length = math.hypot(*values)
     if not values or not math.isfinite(length):
@@ -62,12 +64,12 @@ def unit_vector(values: list[float]) -> array:
 class SearchIndex:
     """Rank a consistent snapshot of passages and their normalized embeddings."""
 
-    def __init__(self, chunks: list[Chunk], vectors: list[array]) -> None:
+    def __init__(self, chunks: list[Chunk], vectors: list[array[float]]) -> None:
         self.chunks = chunks
         self.vectors = vectors
         self._keywords: BM25 | None = None
 
-    def _vector_rank(self, query: array, limit: int) -> list[tuple[int, float]]:
+    def _vector_rank(self, query: array[float], limit: int) -> list[tuple[int, float]]:
         try:
             import numpy as np  # pyright: ignore[reportMissingImports]
         except ImportError:
@@ -76,7 +78,7 @@ class SearchIndex:
             scores = (np.asarray(self.vectors) @ np.asarray(query)).tolist()
         return sorted(enumerate(scores), key=lambda item: -item[1])[:limit]
 
-    def search(self, query: str, k: int, mode: str, vector: array | None) -> list[Chunk]:
+    def search(self, query: str, k: int, mode: str, vector: array[float] | None) -> list[Chunk]:
         """Return scored chunks using BM25, cosine similarity or reciprocal rank fusion."""
         rankings: list[list[tuple[int, float]]] = []
         limit = k * 4 if mode == "hybrid" else k
