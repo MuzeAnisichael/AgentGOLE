@@ -12,11 +12,11 @@ __version__ = "0.2.0.dev0"
 __all__ = [
     "Agent",
     "Embedding",
+    "Event",
     "Knowledge",
     "Model",
     "Result",
-    "Event",
-    "tool",
-    "memory",
     "__version__",
-]  # noqa: RUF022
+    "memory",
+    "tool",
+]
