@@ -13,3 +13,5 @@ build/
 .env.*
 gole.yaml
 agent_example.py
+
+.gole/

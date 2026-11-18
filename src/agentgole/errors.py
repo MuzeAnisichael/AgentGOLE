@@ -31,3 +31,7 @@ class RunTimeoutError(AgentGoleError):
 
 class MissingDependencyError(AgentGoleError):
     """An optional dependency is missing."""
+
+
+class OutputValidationError(AgentGoleError):
+    """The final response still fails its requested schema after corrections."""

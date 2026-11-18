@@ -25,3 +25,15 @@ async def test_stream_emits_deltas_then_a_complete_reply():
     assert "".join(chunk.text for chunk in chunks) == "scripted text"
     assert chunks[-1].response and chunks[-1].response.message.content == "scripted text"
     assert not (await model.probe()).tools
+
+
+async def test_embedding_batches_are_reproducible_and_tokens_handle_mixed_text():
+    from agentgole.kernel.context import estimate_tokens
+    from agentgole.testing import FakeEmbedding
+
+    model = FakeEmbedding(7)
+    batch = await model.embed(["上海", "notes"])
+    assert batch[0] == (await FakeEmbedding(7).embed(["上海"]))[0]
+    assert len(batch[0]) == 7 and batch[0] != batch[1]
+    assert model.calls == [["上海", "notes"]]
+    assert estimate_tokens("会议notes") == 4

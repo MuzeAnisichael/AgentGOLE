@@ -4,7 +4,7 @@ import logging
 from typing import Any
 
 from ..protocols import EventSink
-from ..protocols.types import Event, Trace
+from ..protocols.types import Chunk, Citation, Event, Trace
 
 _logger = logging.getLogger("agentgole.kernel.events")
 
@@ -17,6 +17,18 @@ class RunEvents:
         self.sink = sink
         self.step: int | None = None
         self.trace = Trace()
+        self.citations: list[Citation] = []
+        self._cited: set[str] = set()
+
+    async def retrieved(self, query: str, chunks: list[Chunk]) -> None:
+        """Record all retrieval events and keep each passage's first citation."""
+        for chunk in chunks:
+            if chunk.id not in self._cited:
+                self._cited.add(chunk.id)
+                self.citations.append(
+                    Citation(source=chunk.source, page=chunk.page, text=chunk.text)
+                )
+        await self.send("retrieve", query=query, chunks=chunks)
 
     async def send(self, kind: str, **fields: Any) -> None:
         """Deliver a timestamped event with the current action number."""

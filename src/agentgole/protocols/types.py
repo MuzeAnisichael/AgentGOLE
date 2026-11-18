@@ -5,7 +5,7 @@ from __future__ import annotations
 from time import time
 from typing import TYPE_CHECKING, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 ToolMode = Literal["auto", "native", "prompt"]
 ResolvedMode = Literal["native", "prompt"]
@@ -130,12 +130,46 @@ class Trace(BaseModel):
         show(self)
 
 
+class Document(BaseModel):
+    """Loaded source text and optional one-based page number."""
+
+    text: str
+    source: str
+    page: int | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class Chunk(BaseModel):
+    """An indexed passage with stable identity and retrieval score."""
+
+    id: str
+    text: str
+    source: str
+    page: int | None = None
+    score: float = 0.0
+
+
+class Citation(BaseModel):
+    """A short source excerpt collected during retrieval."""
+
+    source: str
+    page: int | None = None
+    text: str
+
+    @field_validator("text")
+    @classmethod
+    def _excerpt(cls, value: str) -> str:
+        return value[:300]
+
+
 class Result(BaseModel):
     """The final text, actions, token usage and trace of one agent run."""
 
     text: str
     steps: list[Step]
     usage: Usage
+    citations: list[Citation] = Field(default_factory=list[Citation])
+    output: Any = None
     trace: Trace
     run_id: str
     session: str

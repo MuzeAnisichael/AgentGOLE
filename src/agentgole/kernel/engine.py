@@ -133,6 +133,7 @@ async def execute(
                 result = Result(
                     text=text,
                     steps=state.history,
+                    citations=events.citations,
                     usage=usage,
                     trace=Trace(events=events.trace.events),
                     session=session,
