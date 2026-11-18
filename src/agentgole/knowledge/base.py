@@ -99,9 +99,9 @@ class Knowledge:
     async def _build(
         self, prior: State, extra: str | None, expected_dim: int | None
     ) -> dict[str, int] | None:
-        specs = list(
-            dict.fromkeys([*self._sources, *prior.extra_sources, *([extra] if extra else [])])
-        )
+        specs = [*self._sources, *prior.extra_sources]
+        if extra is not None:
+            specs.append(extra)
         sources = await discover_sources(specs)
         removed = prior.documents.keys() - set(sources)
         meta = self._settings()
