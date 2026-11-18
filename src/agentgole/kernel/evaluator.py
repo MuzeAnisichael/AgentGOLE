@@ -106,12 +106,14 @@ async def call_tools(action: CallTool, ctx: StepContext, events: RunEvents) -> l
         await events.send("tool_call", tool=call.name, args=call.arguments)
         error = None
         try:
+            if call.invalid_arguments:
+                raise ToolError("invalid arguments JSON")
             tool = ctx.tools.get(call.name)
             if tool is None:
                 raise ToolError(f"Unknown tool '{call.name}'. Choose a registered tool.")
             output = _serialize(await tool.call(**call.arguments))
         except Exception as exc:  # noqa: BLE001 - tool failures become observations
-            error = f"{type(exc).__name__}: {exc}"
+            error = str(exc) if call.invalid_arguments else f"{type(exc).__name__}: {exc}"
             output = _serialize(f"Error: {error}")
         results.append(ToolResult(call_id=call.id, name=call.name, output=output, error=error))
         await events.send(

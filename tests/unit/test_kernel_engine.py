@@ -264,3 +264,32 @@ async def test_finish_supplies_token_before_step_if_marker_absent():
     finish = next(i for i, e in enumerate(events) if e.type == "step" and e.action == "finish")
     assert [(e.type, e.text) for e in events if e.type == "token"] == [("token", result.text)]
     assert events[finish - 1].type == "token"
+
+
+async def test_malformed_native_arguments_become_one_observation():
+    from agentgole.models.wire import completed_response
+
+    calls = completed_response(
+        {
+            "choices": [
+                {
+                    "message": {
+                        "tool_calls": [
+                            {"function": {"name": "echo", "arguments": text}}
+                            for text in ("", "{'value': 2,}", "broken")
+                        ]
+                    }
+                }
+            ]
+        },
+        "fake",
+    ).message.tool_calls
+    assert len({call.id for call in calls if call.id}) == 3
+    assert [c.arguments for c in calls[:2]] == [{}, {"value": 2}]
+    model = FakeModel(["recovered"])
+    harness = Harness(model)
+    result = await harness.run(
+        Script(CallTool(calls=calls), CallModel(), Finish(output="recovered"))
+    )
+    assert result.steps[0].results[1].output == "2"
+    assert model.requests[0]["messages"][-1].content == "Error: invalid arguments JSON"

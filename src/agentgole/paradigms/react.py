@@ -1,10 +1,10 @@
 """Prompt-based reasoning and tool dispatch."""
 
-import ast
 import json
 import re
 from uuid import uuid4
 
+from .._json import parse_object
 from ..protocols import StepContext
 from ..protocols.types import Action, CallModel, CallTool, Finish, Message, RunState, ToolCall
 from ..tools._schema import validate_arguments
@@ -23,38 +23,6 @@ Action:
 To finish, reply in this format:
 Thought: <brief thought>
 Final Answer: <final answer>"""
-_JSON_TOKENS = re.compile(
-    r"""(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[{}]|,(?=\s*[}\]]))""", re.DOTALL
-)
-
-
-def _reject_constant(token: str) -> None:
-    raise ValueError(f"Invalid JSON constant: {token}")
-
-
-def _first_object(text: str) -> dict:
-    start = text.find("{")
-    if start < 0:
-        raise ValueError("Expected a JSON action object or a Final Answer")
-    pieces: list[str] = []
-    depth = 0
-    end = start
-    for match in _JSON_TOKENS.finditer(text, start):
-        token = match[0]
-        pieces.append(text[end : match.start()])
-        end = match.end()
-        if token == ",":
-            continue
-        if token.startswith("'"):
-            token = json.dumps(ast.literal_eval(token))
-        pieces.append(token)
-        if token == "{":
-            depth += 1
-        elif token == "}":
-            depth -= 1
-            if depth == 0:
-                return json.loads("".join(pieces), parse_constant=_reject_constant)
-    raise ValueError("Unclosed JSON action object")
 
 
 def _request() -> CallModel:
@@ -87,7 +55,7 @@ class React:
         if "{" not in raw:
             return Finish(output=re.sub(r"^\s*Thought:[^\n]*(?:\n|$)", "", raw).strip())
         try:
-            action = _first_object(raw)
+            action = parse_object(raw)
             name = action.get("tool")
             if not isinstance(name, str) or name not in ctx.tools:
                 raise ValueError(f"Unknown tool: {name!r}")

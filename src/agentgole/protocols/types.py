@@ -17,6 +17,7 @@ class ToolCall(BaseModel):
     id: str
     name: str
     arguments: dict[str, Any]
+    invalid_arguments: bool = Field(default=False, exclude=True)
 
 
 class Message(BaseModel):
