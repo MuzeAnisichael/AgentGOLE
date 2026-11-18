@@ -55,6 +55,9 @@ async def _stream_model(
 ) -> ModelResponse:
     response = None
     pending = ""
+    trim_answer = bool(marker) and pending_tokens is None
+    started_answer = False
+    trailing = ""
     chunks = ctx.model.stream(messages, tools=specs)
     try:
         async for chunk in chunks:
@@ -71,6 +74,15 @@ async def _stream_model(
                 text = pending[index + len(marker) :]
                 marker = None
                 pending = ""
+            if trim_answer and text:
+                # ReAct strips the answer. Hold whitespace until another word confirms it is internal.
+                text = trailing + text
+                if not started_answer:
+                    text = text.lstrip()
+                visible = text.rstrip()
+                trailing = text[len(visible) :]
+                text = visible
+                started_answer = started_answer or bool(text)
             if text:
                 if pending_tokens is None:
                     await events.send("token", text=text)

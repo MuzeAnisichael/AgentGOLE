@@ -49,8 +49,8 @@ async def _actions(
     next_action: Action | None = None
     validated: Any = None
     # Tool requests and custom paradigms can replace intermediate prose at Finish.
-    direct = type(paradigm) in (Auto, React) and not ctx.tools and schema is None
-    pending_tokens: list[str] | None = None if direct else []
+    builtin_stream = type(paradigm) in (Auto, React) and schema is None
+    pending_tokens: list[str] | None = []
 
     while state.turn < max_steps:
         events.step = state.turn + 1
@@ -60,8 +60,9 @@ async def _actions(
         thought: str | None = None
         if isinstance(action, CallModel):
             try:
-                if pending_tokens is not None:
-                    pending_tokens.clear()
+                # ReAct's explicit answer marker also makes subsequent text final.
+                immediate = builtin_stream and (not ctx.tools or bool(action.emit_tokens_after))
+                pending_tokens = None if immediate else []
                 response = await call_model(
                     action, state.messages, ctx, streaming, events, pending_tokens
                 )

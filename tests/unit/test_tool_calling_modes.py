@@ -75,3 +75,12 @@ async def test_direct_stream_completes_missing_deltas(prefix):
         assert next(i for i, e in enumerate(events) if e.type == "token") < next(
             i for i, e in enumerate(events) if e.type == "model_end"
         )
+
+
+async def test_marked_prompt_answer_arrives_before_model_end():
+    model = FakeModel(["Thought: done\nFinal Answer:  first  second  "])
+    agent = gole.Agent(model, tools=[weather], tool_mode="prompt")
+    events = [event async for event in agent.astream("weather")]
+    end = next(i for i, e in enumerate(events) if e.type == "model_end")
+    assert "".join(e.text for e in events[:end] if e.type == "token") == "first  second"
+    assert events[-1].result.text == "first  second"
