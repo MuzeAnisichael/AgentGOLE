@@ -9,7 +9,7 @@ from pathlib import Path
 from time import monotonic
 from uuid import uuid4
 
-from .. import Agent, Knowledge, Model
+from .. import Agent, Embedding, Knowledge, Model
 from .._sync import run_sync
 from ..config import default_model, load_config
 from ..errors import AgentGoleError, ConfigError
@@ -33,21 +33,27 @@ def _init(force: bool) -> int:
 async def _doctor() -> int:
     config = load_config()
     aliases = config.get("models", {})
-    specs: list[str] = list(aliases)
+    specs = [(name, name == "embed") for name in aliases]
     try:
-        specs.insert(0, default_model(config))
+        specs.insert(0, (default_model(config), False))
     except ConfigError:
         if not specs:
             print(msg.NO_MODEL, file=sys.stderr)
             return 1
     failed = False
-    seen: set[str] = set()
-    for spec in specs:
+    seen: set[tuple[str, bool]] = set()
+    for spec, is_embedding in specs:
         label = aliases.get(spec, spec)
-        if label in seen:
+        identity = (label, is_embedding)
+        if identity in seen:
             continue
-        seen.add(label)
+        seen.add(identity)
         try:
+            if is_embedding:
+                encoder = Embedding(spec, retries=0)
+                await encoder.aembed(["ping"])
+                print(msg.EMBED_OK.format(encoder.name))
+                continue
             client = create_client(spec, config=config, retries=0)
             await client.check_connection()
             caps = await client.probe()

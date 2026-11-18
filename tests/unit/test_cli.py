@@ -117,3 +117,19 @@ def test_chat_model_override_also_switches_fact_extraction(tmp_path, monkeypatch
     monkeypatch.setattr("builtins.input", lambda _: next(replies))
     assert cli.main(["chat", "agent.py:agent", "--model", "ollama/local"]) == 0
     assert not original.requests and memory.export()["facts"] == ["local fact"]
+
+
+def test_doctor_probes_embed_alias_with_embeddings(tmp_path, monkeypatch, capsys):
+    (tmp_path / "gole.yaml").write_text("models:\n  embed: ollama/bge-m3\n", encoding="utf-8")
+
+    def respond(request):
+        assert request.url.path == "/v1/embeddings"
+        return httpx.Response(200, json={"data": [{"index": 0, "embedding": [1.0]}]})
+
+    factory = cli.create_client
+    monkeypatch.setattr(
+        "agentgole.models.embedding.create_client",
+        lambda *a, **kw: factory(*a, **kw, transport=httpx.MockTransport(respond)),
+    )
+    assert cli.main(["doctor"]) == 0
+    assert "[ok]" in (out := capsys.readouterr().out) and "文本嵌入" in out
