@@ -232,7 +232,7 @@ agent = gole.Agent(model="smart")   # 使用别名
 
 ### 3.3 检查环境
 
-`gole doctor` 逐个连接已配置的模型，并探测它们的能力（下为示意输出）：
+`gole doctor` 逐个连接已配置的模型，并探测它们的能力。它会对每个模型发起一次只生成 1 个 token 的真实请求，云端 API 会因此产生极少量费用（下为示意输出）：
 
 ```text
 $ gole doctor
@@ -314,6 +314,8 @@ paper = agent.run("从这段摘要中提取信息：...", output=Paper).output  
 gole chat --model ollama/qwen3:8b
 gole chat my_agent.py:agent      # 和你在代码里定义的 Agent 聊天
 ```
+
+对话中输入 `/reset` 开始新会话，输入 `/exit` 退出。
 
 ## 5. 复杂度阶梯 L0–L5
 
@@ -413,12 +415,12 @@ smart = gole.Model("deepseek/deepseek-chat", temperature=0.3, max_tokens=4096, t
 local = gole.Model("Qwen2.5-7B-Instruct", base_url="http://localhost:8000/v1", api_key="EMPTY")
 
 fast.generate("你好")     # 不经过 Agent，直接调用模型
-fast.capabilities          # {"tools": True, "vision": False, "json_mode": True, "context": 32768}
+fast.capabilities          # Capabilities(tools=True, json_mode=False, vision=False, context=None)，首次访问时探测并缓存
 
 embed = gole.Embedding("ollama/bge-m3")   # 嵌入模型，供记忆与知识库使用
 ```
 
-- **工具调用降级**：`tool_mode="auto"`（默认）先探测模型能力，支持原生函数调用就用原生，否则用提示词约定格式并解析；也可以强制指定 `"native"` 或 `"prompt"`。
+- **工具调用降级**：`tool_mode="auto"`（默认）先探测模型能力，支持原生函数调用就用原生，否则用提示词约定格式并解析；也可以强制指定 `"native"` 或 `"prompt"`。`gole.Model` 和 `gole.Agent` 都接受 `tool_mode`，Agent 上的设置优先；没有注册任何工具时，不使用提示词协议，直接对话。
 - **降级分阶段建设**：v0.1 提供通用 ReAct 模板、损坏 JSON 修复和带报错信息的重试；v0.3 起接入推理后端的约束解码（Ollama 结构化输出、vLLM guided decoding、llama.cpp GBNF），并发布小模型工具调用成功率基准。
 - **多模型分工**：记忆摘要、规划、评审等环节可以各自指定模型，例如用小模型做摘要：`gole.Agent(model=smart, memory=gole.memory.Summary(model=fast))`。
 
@@ -526,10 +528,10 @@ kb = gole.Knowledge(
     sources=["./papers", "./notes/*.md", "https://example.com/faq"],
     embedding="ollama/bge-m3",
     store="./.gole/kb",            # 本地持久化，再次运行时增量更新
-    chunk_size=512, chunk_overlap=64,
+    chunk_size=512, chunk_overlap=64,   # 按字符计
     retriever="hybrid",            # "vector" | "keyword" | "hybrid"
-    rerank=None,                   # 例如 "bge-reranker"
-    backend="builtin",             # 或 "llamaindex" | "langchain"
+    rerank=None,                   # 例如 "bge-reranker"（v0.4 起）
+    backend="builtin",             # 或 "llamaindex" | "langchain"（v0.4 起）
 )
 
 kb.search("对比学习的损失函数", k=5)    # 直接检索，返回带来源的片段
