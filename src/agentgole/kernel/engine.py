@@ -1,12 +1,12 @@
 """Drive a paradigm to completion within a run's action and time budgets."""
 
 import asyncio
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 from time import monotonic
 
 from ..errors import MaxStepsError, RunTimeoutError, UnsupportedToolsError
 from ..paradigms import Auto, React
-from ..protocols import EventSink, Memory, Paradigm, StepContext
+from ..protocols import EventSink, Memory, Paradigm, Retriever, StepContext
 from ..protocols.types import (
     CallModel,
     CallTool,
@@ -19,7 +19,7 @@ from ..protocols.types import (
     Trace,
     Usage,
 )
-from .context import append_results, initial_state
+from .context import append_results, initial_state, prepare_knowledge
 from .evaluator import call_model, call_tools
 from .events import RunEvents
 
@@ -31,6 +31,8 @@ async def _actions(
     events: RunEvents,
     max_steps: int,
     streaming: bool,
+    retrievers: Sequence[Retriever],
+    knowledge_mode: str,
 ) -> tuple[str, Usage]:
     usage = Usage()
     # Tool requests and custom paradigms can replace intermediate prose at Finish.
@@ -56,6 +58,9 @@ async def _actions(
                 ctx.tool_mode = "prompt"
                 ctx.downgrade()
                 await events.recover(exc)
+                await prepare_knowledge(
+                    state, ctx, events, retrievers, knowledge_mode, after_downgrade=True
+                )
                 continue
             state.messages.append(response.message)
             state.last_response = response.message
@@ -102,6 +107,8 @@ async def execute(
     timeout: float | None,
     streaming: bool,
     emit: EventSink,
+    retrievers: Sequence[Retriever] = (),
+    knowledge_mode: str = "auto",
     resolve_mode: Callable[[], Awaitable[ResolvedMode]] | None = None,
 ) -> Result:
     """Execute one run and publish its ordered events to the supplied sink."""
@@ -121,7 +128,10 @@ async def execute(
                 state = initial_state(input, instructions, loaded)
                 if resolve_mode is not None:
                     ctx.tool_mode = await resolve_mode()
-                text, usage = await _actions(state, paradigm, ctx, events, max_steps, streaming)
+                await prepare_knowledge(state, ctx, events, retrievers, knowledge_mode)
+                text, usage = await _actions(
+                    state, paradigm, ctx, events, max_steps, streaming, retrievers, knowledge_mode
+                )
                 if memory is not None:
                     turn = [
                         Message(role="user", content=input),
