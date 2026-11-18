@@ -67,3 +67,22 @@ def test_chat_model_available_while_importing_target(tmp_path, monkeypatch):
     monkeypatch.setattr("builtins.input", lambda _: "/exit")
     assert cli.main(["chat", "--model", "ollama/demo", f"{target}:agent"]) == 0
     assert "GOLE_MODEL" not in os.environ
+
+
+def test_chat_recovers_after_failed_turn(monkeypatch, capsys):
+    from agentgole import Agent
+    from agentgole.errors import ModelError
+    from agentgole.testing import FakeModel
+
+    class Flaky(FakeModel):
+        async def generate(self, messages, **kwargs):
+            if messages[-1].content == "fail":
+                raise ModelError("first turn failed")
+            return await super().generate(messages, **kwargs)
+
+    monkeypatch.setattr(cli, "_load_agent", lambda *args: Agent(Flaky(["recovered"])))
+    inputs = iter(["fail", "again", "/exit"])
+    monkeypatch.setattr("builtins.input", lambda _: next(inputs))
+    assert cli.main(["chat", "agent.py:agent"]) == 0
+    output = capsys.readouterr()
+    assert "first turn failed" in output.err and "recovered" in output.out

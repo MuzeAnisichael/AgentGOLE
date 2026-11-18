@@ -105,12 +105,15 @@ def _chat(target: str | None, model: str | None) -> int:
             print(msg.RESET)
         elif prompt:
             wrote_text = False
-            for ev in agent.stream(prompt, session=session, events=["token", "run_end"]):
-                if ev.type == "token":
-                    print(ev.text, end="", flush=True)
-                    wrote_text = True
-                elif not wrote_text:
-                    print(ev.result.text, end="")
+            try:
+                for ev in agent.stream(prompt, session=session, events=["token", "run_end"]):
+                    if ev.type == "token":
+                        print(ev.text, end="", flush=True)
+                        wrote_text = True
+                    elif not wrote_text:
+                        print(ev.result.text, end="")
+            except (AgentGoleError, OSError) as exc:
+                print(msg.FAILED.format(exc), file=sys.stderr)
             print()
 
 
