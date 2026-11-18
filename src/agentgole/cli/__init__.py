@@ -5,7 +5,6 @@ import os
 import re
 import runpy
 import sys
-from copy import copy
 from pathlib import Path
 from time import monotonic
 from uuid import uuid4
@@ -91,8 +90,8 @@ def _load_agent(target: str, model: str | None) -> Agent:
 def _chat(target: str | None, model: str | None) -> int:
     agent = _load_agent(target, model) if target else Agent(model)
     if target and model:
-        agent = copy(agent)
         agent._binding = Model(model)._binding
+        agent._bind_memory()
     session = "default"
     while True:
         try:

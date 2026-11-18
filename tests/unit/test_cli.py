@@ -101,3 +101,19 @@ def test_kb_build_prints_incremental_counts(tmp_path, monkeypatch, capsys):
     assert cli.main(args) == 0
     assert "新增块 0，跳过块 1" in capsys.readouterr().out
     assert len(embedding.calls) == 1
+
+
+def test_chat_model_override_also_switches_fact_extraction(tmp_path, monkeypatch):
+    from agentgole import Agent
+    from agentgole.memory import LongTerm
+    from agentgole.testing import FakeModel
+
+    original, local = FakeModel([]), FakeModel(["ok", '["local fact"]'])
+    memory = LongTerm(tmp_path / "facts.db")
+    agent = Agent(original, memory=memory)
+    monkeypatch.setattr(cli, "_load_agent", lambda *_: agent)
+    monkeypatch.setattr("agentgole.model.create_client", lambda *args, **kwargs: local)
+    replies = iter(["remember", "/exit"])
+    monkeypatch.setattr("builtins.input", lambda _: next(replies))
+    assert cli.main(["chat", "agent.py:agent", "--model", "ollama/local"]) == 0
+    assert not original.requests and memory.export()["facts"] == ["local fact"]
