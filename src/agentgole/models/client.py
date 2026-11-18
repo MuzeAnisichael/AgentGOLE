@@ -3,16 +3,18 @@
 import asyncio
 import math
 import re
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
-from typing import Any
+from typing import Any, TypeVar
 
 import httpx
 
 from ..errors import ModelError, UnsupportedToolsError
 from ..protocols.types import Capabilities, Message, ModelChunk, ModelResponse, ToolSpec
 from .wire import completed_response, stream_response, wire_message
+
+_T = TypeVar("_T")
 
 _TOOL_PARAM = r"(?:tools|tool[_ -]calling|function[_ -]calling|functions)"
 _UNSUPPORTED_TOOLS = re.compile(
@@ -123,7 +125,42 @@ class CompatibleClient:
             ]
         if stream:
             payload.setdefault("stream_options", {"include_usage": True})
-        url = self._base_url + "/chat/completions"
+
+        async def decode(response: httpx.Response) -> AsyncIterator[ModelChunk]:
+            if stream:
+                async for chunk in stream_response(response, self.name):
+                    yield chunk
+            else:
+                await response.aread()
+                yield ModelChunk(response=completed_response(response.json(), self.name))
+
+        async for chunk in self._post(
+            "/chat/completions", payload, decode, "chat completion", bool(tools)
+        ):
+            yield chunk
+
+    async def embedding_data(self, texts: list[str]) -> Any:
+        """Request a batch of embeddings with the same retry policy as chat."""
+
+        async def decode(response: httpx.Response) -> AsyncIterator[Any]:
+            await response.aread()
+            yield response.json()["data"]
+
+        payload = {"model": self._model, "input": texts}
+        result = None
+        async for data in self._post("/embeddings", payload, decode, "embedding"):
+            result = data
+        return result
+
+    async def _post(
+        self,
+        path: str,
+        payload: dict[str, Any],
+        decode: Callable[[httpx.Response], AsyncIterator[_T]],
+        operation: str,
+        used_tools: bool = False,
+    ) -> AsyncIterator[_T]:
+        url = self._base_url + path
         async with self._http() as http:
             for attempt in range(self._retries + 1):
                 delay = _retry_delay(attempt, None)
@@ -133,21 +170,15 @@ class CompatibleClient:
                     async with http.stream("POST", url, json=payload) as response:
                         status = response.status_code
                         if response.is_success:
-                            if stream:
-                                async for chunk in stream_response(response, self.name):
-                                    emitted = True
-                                    yield chunk
-                            else:
-                                await response.aread()
-                                yield ModelChunk(
-                                    response=completed_response(response.json(), self.name)
-                                )
+                            async for item in decode(response):
+                                emitted = True
+                                yield item
                             return
                         await response.aread()
                         if attempt == self._retries or not (
                             response.status_code == 429 or 500 <= response.status_code < 600
                         ):
-                            raise self._status_error(response, bool(tools))
+                            raise self._status_error(response, used_tools)
                         delay = _retry_delay(attempt, response.headers.get("Retry-After"))
                 except httpx.TransportError as exc:
                     # Replaying a partially delivered stream would duplicate visible tokens.
@@ -158,10 +189,10 @@ class CompatibleClient:
                 except (ValueError, TypeError, KeyError, IndexError, AttributeError):
                     if status is None:
                         raise ModelError(
-                            f"{self._provider}: invalid chat completion request."
+                            f"{self._provider}: invalid {operation} request."
                         ) from None
                     raise ModelError(
-                        f"{self._provider} HTTP {status}: invalid chat completion response."
+                        f"{self._provider} HTTP {status}: invalid {operation} response."
                     ) from None
                 await asyncio.sleep(delay)
 
