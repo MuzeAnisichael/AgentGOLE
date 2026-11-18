@@ -293,3 +293,13 @@ async def test_malformed_native_arguments_become_one_observation():
     )
     assert result.steps[0].results[1].output == "2"
     assert model.requests[0]["messages"][-1].content == "Error: invalid arguments JSON"
+
+
+async def test_memory_receives_current_query():
+    class QueryStore(Store):
+        async def load(self, session, query=None):
+            return [Message(role="system", content=f"{session} / {query}")]
+
+    model = FakeModel(["ok"])
+    await Harness(model).run(Script(CallModel(), Finish(output="ok")), memory=QueryStore())
+    assert model.requests[0]["messages"][1].content == "session1 / request"

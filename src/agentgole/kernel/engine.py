@@ -116,7 +116,7 @@ async def execute(
                 await events.send("run_start", input=input, session=session)
                 loaded: list[Message] = []
                 if memory is not None:
-                    loaded = await memory.load(session)
+                    loaded = await memory.load(session, query=input)
                     await events.send("memory_load", messages=list(loaded))
                 state = initial_state(input, instructions, loaded)
                 if resolve_mode is not None:
