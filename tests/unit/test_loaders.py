@@ -92,3 +92,14 @@ async def test_missing_format_dependency_provides_install_command(module, name, 
     with pytest.raises(MissingDependencyError) as exc:
         await load_source(str(FIXTURES / name))
     assert 'pip install "agentgole[rag]"' in str(exc.value)
+
+
+async def test_unavailable_url_reports_actionable_error_without_query_credentials():
+    from agentgole.errors import ConfigError
+
+    with pytest.raises(ConfigError, match="HTTP 404") as caught:
+        await load_source(
+            "https://example.test/missing?key=secret",
+            transport=httpx.MockTransport(lambda _: httpx.Response(404)),
+        )
+    assert "secret" not in str(caught.value) and "URL" in str(caught.value)

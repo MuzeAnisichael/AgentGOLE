@@ -8,7 +8,7 @@ from pathlib import Path
 
 import httpx
 
-from agentgole.errors import MissingDependencyError
+from agentgole.errors import ConfigError, MissingDependencyError
 from agentgole.protocols.types import Document
 
 _logger = logging.getLogger(__name__)
@@ -182,8 +182,18 @@ async def load_source(
     if not _is_url(source):
         return await asyncio.to_thread(_load_file, Path(source).expanduser())
     async with httpx.AsyncClient(transport=transport, follow_redirects=True) as client:
-        response = await client.get(source)
-        response.raise_for_status()
+        try:
+            response = await client.get(source)
+            response.raise_for_status()
+        except (httpx.HTTPError, httpx.InvalidURL) as exc:
+            reason = (
+                f"HTTP {exc.response.status_code}"
+                if isinstance(exc, httpx.HTTPStatusError)
+                else type(exc).__name__
+            )
+            raise ConfigError(
+                f"Knowledge source unavailable ({reason}). Check the URL and connection."
+            ) from None
         text = response.text
         if (
             response.headers.get("content-type", "").partition(";")[0].strip().lower()
