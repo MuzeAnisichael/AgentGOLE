@@ -30,9 +30,14 @@ class Layered:
 
     async def save(self, session: str, messages: list[Message]) -> None:
         """Write the same complete turn to both memories before returning."""
-        async with asyncio.TaskGroup() as tasks:
-            tasks.create_task(self.short.save(session, messages))
-            tasks.create_task(self.long.save(session, messages))
+        outcomes = await asyncio.gather(
+            self.short.save(session, messages),
+            self.long.save(session, messages),
+            return_exceptions=True,
+        )
+        for outcome in outcomes:
+            if isinstance(outcome, BaseException):
+                raise outcome
 
     def tools(self, session: str = "default") -> list[Tool]:
         """Expose the long-term layer's session-bound memory tools."""

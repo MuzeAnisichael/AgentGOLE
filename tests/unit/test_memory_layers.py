@@ -135,3 +135,19 @@ async def test_layered_management_and_load_order(tmp_path):
 def test_external_memory_backend_reports_version():
     with pytest.raises(ConfigError, match="v0.4"):
         LongTerm(backend="mem0")
+
+
+async def test_layered_save_exposes_model_errors_to_callers(tmp_path):
+    from agentgole import Agent
+    from agentgole.errors import ModelError
+
+    class FailedExtraction(FakeModel):
+        async def generate(self, messages, **kwargs):
+            if messages[0].role == "system" and "durable facts" in messages[0].content:
+                raise ModelError("extraction unavailable")
+            return await super().generate(messages, **kwargs)
+
+    memory = Layered(short=Window(), long=LongTerm(tmp_path / "facts.db"))
+    with pytest.raises(ModelError, match="extraction unavailable"):
+        await Agent(FailedExtraction(["ok"]), memory=memory).arun("remember")
+    assert memory.export()["short"]["messages"][-1]["content"] == "ok"
