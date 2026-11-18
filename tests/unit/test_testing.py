@@ -37,3 +37,4 @@ async def test_embedding_batches_are_reproducible_and_tokens_handle_mixed_text()
     assert len(batch[0]) == 7 and batch[0] != batch[1]
     assert model.calls == [["上海", "notes"]]
     assert estimate_tokens("会议notes") == 4
+    assert estimate_tokens("😊😊😊😊") == 1

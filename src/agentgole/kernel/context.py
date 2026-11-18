@@ -1,6 +1,6 @@
 """Conversation assembly for native and prompt-based tools."""
 
-import unicodedata
+import re
 
 from ..protocols.types import Message, RunState, ToolResult
 
@@ -27,7 +27,14 @@ def append_results(state: RunState, results: list[ToolResult], as_observation: b
         )
 
 
+_CJK = re.compile(
+    r"[\u1100-\u11ff\u3040-\u30ff\u3100-\u312f\u31a0-\u31bf"
+    r"\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af\uf900-\ufaff"
+    r"\U00020000-\U000323af]"
+)
+
+
 def estimate_tokens(text: str) -> int:
-    """Count wide CJK characters individually and other characters in groups of four."""
-    wide = sum(unicodedata.east_asian_width(ch) in {"W", "F"} for ch in text)
-    return wide + (len(text) - wide + 3) // 4
+    """Count CJK characters individually and other characters in groups of four."""
+    cjk = len(_CJK.findall(text))
+    return cjk + (len(text) - cjk + 3) // 4
