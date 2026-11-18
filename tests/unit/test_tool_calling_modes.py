@@ -55,3 +55,23 @@ async def test_server_rejection_persists_on_shared_model(monkeypatch):
     assert any(e.type == "error" and e.recoverable for e in result.trace.events)
     assert (await gole.Agent(shared, tools=[weather]).arun("two")).text == "two"
     assert fake.rejects == 1 and not shared.capabilities.tools
+
+
+@pytest.mark.parametrize("prefix", ["", "begin"])
+async def test_direct_stream_completes_missing_deltas(prefix):
+    from agentgole.protocols.types import ModelChunk
+
+    class Partial(FakeModel):
+        async def stream(self, messages, **kwargs):
+            if prefix:
+                yield ModelChunk(text=prefix)
+            yield ModelChunk(response=await self.generate(messages, **kwargs))
+
+    events = [event async for event in gole.Agent(Partial(["begin end"])).astream("hello")]
+    assert (
+        "".join(event.text for event in events if event.type == "token") == events[-1].result.text
+    )
+    if prefix:
+        assert next(i for i, e in enumerate(events) if e.type == "token") < next(
+            i for i, e in enumerate(events) if e.type == "model_end"
+        )

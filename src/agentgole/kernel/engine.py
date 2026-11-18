@@ -6,7 +6,13 @@ from time import monotonic
 from typing import Any
 
 from .._json import OutputSchema
-from ..errors import MaxStepsError, OutputValidationError, RunTimeoutError, UnsupportedToolsError
+from ..errors import (
+    MaxStepsError,
+    ModelError,
+    OutputValidationError,
+    RunTimeoutError,
+    UnsupportedToolsError,
+)
 from ..paradigms import Auto, React
 from ..protocols import EventSink, Memory, Paradigm, Retriever, StepContext
 from ..protocols.types import (
@@ -103,10 +109,18 @@ async def _actions(
                         )
                     )
                     next_action = CallModel(use_tools=False)
-            if streaming and next_action is None and pending_tokens is not None:
-                pieces = (
-                    pending_tokens if "".join(pending_tokens) == action.output else [action.output]
-                )
+            if streaming and next_action is None:
+                if pending_tokens is None:
+                    emitted = "".join(e.text for e in events.trace.events if e.type == "token")
+                    if not action.output.startswith(emitted):
+                        raise ModelError("Streamed text differs from the completed model response.")
+                    pieces = [action.output[len(emitted) :]]
+                else:
+                    pieces = (
+                        pending_tokens
+                        if "".join(pending_tokens) == action.output
+                        else [action.output]
+                    )
                 for piece in pieces:
                     if piece:
                         await events.send("token", text=piece)
