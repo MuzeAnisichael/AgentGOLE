@@ -86,3 +86,18 @@ def test_chat_recovers_after_failed_turn(monkeypatch, capsys):
     assert cli.main(["chat", "agent.py:agent"]) == 0
     output = capsys.readouterr()
     assert "first turn failed" in output.err and "recovered" in output.out
+
+
+def test_kb_build_prints_incremental_counts(tmp_path, monkeypatch, capsys):
+    from agentgole.testing import FakeEmbedding
+
+    embedding = FakeEmbedding()
+    monkeypatch.setattr("agentgole.models.embedding.resolve_embedding", lambda *a, **kw: embedding)
+    source = tmp_path / "notes.md"
+    source.write_text("Team policy", encoding="utf-8")
+    args = ["kb", "build", str(source), "--store", str(tmp_path / "store"), "--name", "test"]
+    assert cli.main(args) == 0
+    assert "文件 1，新增块 1，跳过块 0，删除块 0，耗时" in capsys.readouterr().out
+    assert cli.main(args) == 0
+    assert "新增块 0，跳过块 1" in capsys.readouterr().out
+    assert len(embedding.calls) == 1

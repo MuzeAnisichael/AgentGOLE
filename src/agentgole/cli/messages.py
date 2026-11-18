@@ -41,3 +41,9 @@ agent = gole.Agent()
 if __name__ == "__main__":
     print(agent.run("用一句话介绍你自己"))
 """
+
+KB_HELP = "管理本地知识库"
+BUILD_HELP = "按来源增量构建知识库"
+BUILD_STATS = (
+    "文件 {files}，新增块 {added}，跳过块 {skipped}，删除块 {deleted}，耗时 {elapsed:.2f} 秒"
+)

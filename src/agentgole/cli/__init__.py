@@ -7,9 +7,10 @@ import runpy
 import sys
 from copy import copy
 from pathlib import Path
+from time import monotonic
 from uuid import uuid4
 
-from .. import Agent, Model
+from .. import Agent, Knowledge, Model
 from .._sync import run_sync
 from ..config import default_model, load_config
 from ..errors import AgentGoleError, ConfigError
@@ -127,8 +128,23 @@ def main(argv: list[str] | None = None) -> int:
     chat = commands.add_parser("chat", help=msg.CHAT_HELP)
     chat.add_argument("--model", help=msg.MODEL_HELP)
     chat.add_argument("target", nargs="?", help=msg.TARGET_HELP)
+    kb = commands.add_parser("kb", help=msg.KB_HELP)
+    sub = kb.add_subparsers(dest="kb_command", required=True)
+    build = sub.add_parser("build", help=msg.BUILD_HELP)
+    build.add_argument("sources", nargs="+")
+    build.add_argument("--embedding")
+    build.add_argument("--store", default="./.gole/kb")
+    build.add_argument("--name")
     args = parser.parse_args(argv)
     try:
+        if args.command == "kb":
+            started = monotonic()
+            knowledge = Knowledge(
+                args.sources, embedding=args.embedding, store=args.store, name=args.name
+            )
+            counts = run_sync(knowledge.abuild())
+            print(msg.BUILD_STATS.format(**counts, elapsed=monotonic() - started))
+            return 0
         if args.command == "init":
             return _init(args.force)
         if args.command == "doctor":
