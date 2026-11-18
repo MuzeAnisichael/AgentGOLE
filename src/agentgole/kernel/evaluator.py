@@ -18,6 +18,7 @@ async def call_model(
     ctx: StepContext,
     streaming: bool,
     events: RunEvents,
+    pending_tokens: list[str] | None,
 ) -> ModelResponse:
     """Generate a reply and emit visible content deltas when streaming."""
     messages = conversation if action.messages is None else action.messages
@@ -30,7 +31,7 @@ async def call_model(
     await events.send("model_start", messages=list(messages), model=ctx.model.name)
     if streaming:
         response = await _stream_model(
-            messages, specs or None, ctx, action.emit_tokens_after, events
+            messages, specs or None, ctx, action.emit_tokens_after, events, pending_tokens
         )
     else:
         response = await ctx.model.generate(messages, tools=specs or None)
@@ -50,6 +51,7 @@ async def _stream_model(
     ctx: StepContext,
     marker: str | None,
     events: RunEvents,
+    pending_tokens: list[str] | None,
 ) -> ModelResponse:
     response = None
     pending = ""
@@ -70,7 +72,10 @@ async def _stream_model(
                 marker = None
                 pending = ""
             if text:
-                await events.send("token", text=text)
+                if pending_tokens is None:
+                    await events.send("token", text=text)
+                else:
+                    pending_tokens.append(text)
     finally:
         close = getattr(chunks, "aclose", None)
         if close is not None:

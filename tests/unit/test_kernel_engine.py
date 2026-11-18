@@ -182,9 +182,8 @@ async def test_stream_marker_split_absent_and_unfiltered():
         streaming=True,
     )
     tokens = [e for e in harness.events if e.type == "token"]
-    assert "".join(field(e, "text") for e in tokens if e.step == 1) == "visible"
-    assert not any(e.step == 2 for e in tokens)
-    assert "".join(field(e, "text") for e in tokens if e.step == 3) == "all"
+    assert [field(e, "text") for e in tokens] == ["done"]
+    assert tokens[0].step == 4
     assert model.requests[-1] == {"messages": [], "tools": None}
 
 
@@ -253,3 +252,15 @@ async def test_fatal_exception_and_callback_isolation(caplog):
     assert "broken handler" in caplog.text
     assert [e.type for e in harness.events] == ["run_start", "model_start", "error"]
     assert field(harness.events[-1], "recoverable") is False and harness.downgrades == 0
+
+
+async def test_finish_supplies_token_before_step_if_marker_absent():
+    harness = Harness(FakeModel(["private notes"]))
+    result = await harness.run(
+        Script(CallModel(emit_tokens_after="Final:"), Finish(output="public answer")),
+        streaming=True,
+    )
+    events = harness.events
+    finish = next(i for i, e in enumerate(events) if e.type == "step" and e.action == "finish")
+    assert [(e.type, e.text) for e in events if e.type == "token"] == [("token", result.text)]
+    assert events[finish - 1].type == "token"

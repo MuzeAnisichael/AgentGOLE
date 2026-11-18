@@ -5,6 +5,7 @@ from collections.abc import Awaitable, Callable
 from time import monotonic
 
 from ..errors import MaxStepsError, RunTimeoutError, UnsupportedToolsError
+from ..paradigms import Auto, React
 from ..protocols import EventSink, Memory, Paradigm, StepContext
 from ..protocols.types import (
     CallModel,
@@ -32,6 +33,10 @@ async def _actions(
     streaming: bool,
 ) -> tuple[str, Usage]:
     usage = Usage()
+    # Tool requests and custom paradigms can replace intermediate prose at Finish.
+    direct = type(paradigm) in (Auto, React) and not ctx.tools
+    pending_tokens: list[str] | None = None if direct else []
+
     while state.turn < max_steps:
         events.step = state.turn + 1
         action = await paradigm.step(state, ctx)
@@ -39,7 +44,11 @@ async def _actions(
         thought: str | None = None
         if isinstance(action, CallModel):
             try:
-                response = await call_model(action, state.messages, ctx, streaming, events)
+                if pending_tokens is not None:
+                    pending_tokens.clear()
+                response = await call_model(
+                    action, state.messages, ctx, streaming, events, pending_tokens
+                )
             except UnsupportedToolsError as exc:
                 if ctx.tool_mode != "native" or not ctx.tools or not action.use_tools:
                     raise
@@ -63,6 +72,13 @@ async def _actions(
             append_results(state, results, action.as_observation)
             step = Step(turn=events.step, action="tool", calls=action.calls, results=results)
         else:
+            if streaming and pending_tokens is not None:
+                pieces = (
+                    pending_tokens if "".join(pending_tokens) == action.output else [action.output]
+                )
+                for piece in pieces:
+                    if piece:
+                        await events.send("token", text=piece)
             step = Step(turn=events.step, action="finish", output=action.output)
         step.duration = monotonic() - started
         state.turn = step.turn
