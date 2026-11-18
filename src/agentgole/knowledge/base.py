@@ -1,20 +1,26 @@
 """Local document indexing and retrieval."""
 
+from __future__ import annotations
+
 import asyncio
 import hashlib
 import logging
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from .._sync import run_sync
 from ..errors import ConfigError, ModelError
 from ..models import embedding as embedding_models
 from ..models.embedding import Embedding
-from ..protocols import EmbeddingClient
-from ..protocols.types import Chunk, Document
+from ..protocols import EmbeddingClient, ModelClient
+from ..protocols.types import Chunk, Document, Result
 from .chunking import split_document
 from .loaders import discover_sources, load_source
 from .retrieval import SearchIndex, unit_vector
 from .store import IndexedDocument, State, Store, index_name, normalize
+
+if TYPE_CHECKING:
+    from ..model import Model
 
 _logger = logging.getLogger("agentgole.knowledge")
 
@@ -215,3 +221,9 @@ class Knowledge:
                 await self._update(expected_dim=len(vector))
                 _, index = await self._snapshot()
         return await asyncio.to_thread(index.search, query, k, self._retriever, vector)
+
+    def ask(self, question: str, *, model: str | Model | ModelClient | None = None) -> Result:
+        """Answer with retrieved context and return the cited passages in the result."""
+        from ..agent import Agent
+
+        return Agent(model, knowledge=self, knowledge_mode="context").run(question)

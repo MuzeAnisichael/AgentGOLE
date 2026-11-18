@@ -37,3 +37,15 @@ async def test_session_bound_memory_tool(tmp_path):
     await agent.arun("记住", session="a")
     assert agent.memory.search("蓝色", session="a") == ["喜欢蓝色"]
     assert agent.memory.search("蓝色", session="b") == []
+
+
+def test_ask_uses_context_and_default_model(tmp_path, monkeypatch):
+    source = tmp_path / "agenda.txt"
+    source.write_text("议程：周三组会。", encoding="utf-8")
+    model = FakeModel(["周三"])
+    monkeypatch.setenv("GOLE_MODEL", "ollama/test")
+    monkeypatch.setattr("agentgole.agent.create_client", lambda *args, **kw: model)
+    kb = gole.Knowledge(source, retriever="keyword", store=tmp_path)
+    result = kb.ask("组会")
+    assert result.text == "周三" and result.citations[0].source.endswith("agenda.txt")
+    assert any("参考资料：" in (m.content or "") for m in model.requests[0]["messages"])
