@@ -3,6 +3,7 @@
 import asyncio
 import glob
 import logging
+from collections.abc import Sequence
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -74,7 +75,7 @@ def _is_url(source: str) -> bool:
     return source.lower().startswith(("https://", "http://"))
 
 
-def _discover(sources: list[str | Path]) -> list[str]:
+def _discover(sources: Sequence[str | Path]) -> list[str]:
     found: dict[str, None] = {}
     visited: set[Path] = set()
 
@@ -108,7 +109,7 @@ def _discover(sources: list[str | Path]) -> list[str]:
     return list(found)
 
 
-async def discover_sources(sources: list[str | Path]) -> list[str]:
+async def discover_sources(sources: Sequence[str | Path]) -> list[str]:
     """Expand directories and globs into unique absolute paths and preserve URL sources."""
     return await asyncio.to_thread(_discover, sources)
 
