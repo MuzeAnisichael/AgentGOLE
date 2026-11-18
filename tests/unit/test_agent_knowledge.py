@@ -49,3 +49,17 @@ def test_ask_uses_context_and_default_model(tmp_path, monkeypatch):
     result = kb.ask("组会")
     assert result.text == "周三" and result.citations[0].source.endswith("agenda.txt")
     assert any("参考资料：" in (m.content or "") for m in model.requests[0]["messages"])
+
+
+def test_memory_resolves_default_embeddings_only_if_needed(tmp_path, monkeypatch):
+    from agentgole.memory import LongTerm
+    from agentgole.testing import FakeEmbedding
+
+    monkeypatch.setenv("GOLE_EMBEDDING", "openai/text-embedding-3-small")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    model = FakeModel(["hi"])
+    assert gole.Agent(model, memory="summary").run("hello").text == "hi"
+    embedding = FakeEmbedding()
+    memory = LongTerm(tmp_path / "notes.db", embedding=embedding, write="tool")
+    gole.Agent(model, memory=memory).memory.add("blue")
+    assert embedding.calls == [["blue"]]

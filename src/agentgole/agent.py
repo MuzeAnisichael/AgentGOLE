@@ -78,9 +78,7 @@ class Agent:
                 raise ConfigError("Choose memory='session', 'summary', 'long', None or a Memory.")
         else:
             self._memory = memory
-        bind = getattr(self._memory, "bind", None)
-        if callable(bind):
-            bind(self._binding.client, resolve_embedding(required=False))
+        self._bind_memory()
         if knowledge_mode not in ("auto", "tool", "context"):
             raise ConfigError("Choose knowledge_mode 'auto', 'tool' or 'context'.")
         self._knowledge_mode = knowledge_mode
@@ -111,6 +109,12 @@ class Agent:
         self._mode: ToolMode | None = tool_mode
         self._verbose = verbose
         self._listeners: dict[str, list[EventCallback]] = {}
+
+    def _bind_memory(self) -> None:
+        bind = getattr(self._memory, "bind", None)
+        if callable(bind):
+            builtin = isinstance(self._memory, (Summary, LongTerm, Layered))
+            bind(self._binding.client, None if builtin else resolve_embedding(required=False))
 
     @property
     def memory(self) -> Any:

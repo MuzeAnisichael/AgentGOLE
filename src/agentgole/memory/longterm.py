@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from .._json import parse_json
 from .._sync import run_sync
 from ..errors import ConfigError
+from ..models.embedding import resolve_embedding
 from ..protocols import EmbeddingClient, ModelClient, Tool
 from ..protocols.types import Message
 from ..tools.function import tool
@@ -55,8 +56,6 @@ class LongTerm:
         self._model: ModelClient | None = None
         self._explicit: EmbeddingClient | None = None
         if embedding is not None:
-            from ..models.embedding import resolve_embedding
-
             self._explicit = resolve_embedding(embedding)
         self._embedding = self._explicit
         self._lock = Lock()
@@ -67,6 +66,8 @@ class LongTerm:
         """Attach the extraction model and optional default embedding client."""
         self._model = model
         self._embedding = self._explicit if self._explicit is not None else embedding
+        if self._embedding is None:
+            self._embedding = resolve_embedding(required=False)
 
     @contextmanager
     def _database(self) -> Iterator[sqlite3.Connection]:
