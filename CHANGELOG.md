@@ -21,6 +21,7 @@
 
 ### Fixed
 
+- A failed memory save, such as a fact extraction error, no longer fails a run whose answer is ready. The run reports a recoverable `error` event and returns its result.
 - Allow direct answers in prompt mode with or without tools.
 - Emit missing final answer tokens and suppress intermediate tool text.
 - Recover malformed tool arguments and generate missing call IDs.

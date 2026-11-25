@@ -1,6 +1,7 @@
 """Drive a paradigm to completion within a run's action and time budgets."""
 
 import asyncio
+import logging
 from collections.abc import Awaitable, Callable, Sequence
 from time import monotonic
 from typing import Any
@@ -31,6 +32,8 @@ from ..protocols.types import (
 from .context import append_results, initial_state, prepare_knowledge
 from .evaluator import call_model, call_tools
 from .events import RunEvents
+
+_logger = logging.getLogger("golekit.kernel.engine")
 
 
 def _answer_tokens(events: RunEvents) -> str:
@@ -210,8 +213,23 @@ async def execute(
                         Message(role="user", content=input),
                         Message(role="assistant", content=text),
                     ]
-                    await memory.save(session, turn)
-                    await events.send("memory_save", messages=turn)
+                    # The answer already exists, so a failed save must not discard it.
+                    failure: Exception | None = None
+                    try:
+                        await memory.save(session, turn)
+                    except asyncio.CancelledError:
+                        if not deadline.expired():
+                            raise
+                        failure = RunTimeoutError(
+                            f"Run timed out after {timeout}s while saving memory."
+                        )
+                    except Exception as exc:  # noqa: BLE001 - reported as a recoverable event
+                        failure = exc
+                    if failure is None:
+                        await events.send("memory_save", messages=turn)
+                    else:
+                        _logger.warning("Memory save failed; this turn was not stored: %s", failure)
+                        await events.recover(failure)
                 # The result inside run_end must not contain that same terminal event.
                 result = Result(
                     text=text,

@@ -303,3 +303,26 @@ async def test_memory_receives_current_query():
     model = FakeModel(["ok"])
     await Harness(model).run(Script(CallModel(), Finish(output="ok")), memory=QueryStore())
     assert model.requests[0]["messages"][1].content == "session1 / request"
+
+
+@pytest.mark.parametrize("stall", [False, True])
+async def test_failed_memory_save_keeps_the_result(stall, caplog):
+    class BrokenStore(Store):
+        async def save(self, session, messages):
+            if stall:
+                await asyncio.Event().wait()
+            raise ModelError("fact extraction failed")
+
+    harness = Harness(FakeModel(["answer"]))
+    result = await harness.run(
+        Script(CallModel(), Finish(output="answer")),
+        memory=BrokenStore(),
+        timeout=0.05 if stall else 10,
+    )
+    assert result.text == "answer"
+    kinds = [e.type for e in harness.events]
+    assert "memory_save" not in kinds and kinds[-2:] == ["error", "run_end"]
+    error = harness.events[-2]
+    assert field(error, "recoverable")
+    assert isinstance(field(error, "exception"), RunTimeoutError if stall else ModelError)
+    assert "Memory save failed" in caplog.text
