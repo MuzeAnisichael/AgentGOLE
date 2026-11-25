@@ -21,6 +21,7 @@
 
 ### Fixed
 
+- Context retrieval no longer injects an empty reference message, places references after the instructions and memory preamble, and leaves the prompt-mode tool protocol on the instructions. A search tool with no match answers 「未找到相关内容。」.
 - A failed memory save, such as a fact extraction error, no longer fails a run whose answer is ready. The run reports a recoverable `error` event and returns its result.
 - Allow direct answers in prompt mode with or without tools.
 - Emit missing final answer tokens and suppress intermediate tool text.

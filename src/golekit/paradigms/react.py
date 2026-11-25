@@ -40,11 +40,13 @@ class React:
         if not state.scratch.get("react_prompt"):
             schema = [tool.spec.model_dump() for tool in ctx.tools.values()]
             prefix = _PROTOCOL.format(tools=json.dumps(schema, ensure_ascii=False))
-            system = next((msg for msg in state.messages if msg.role == "system"), None)
-            if system is None:
-                state.messages.insert(0, Message(role="system", content=prefix))
+            # Only the instructions may carry the protocol; later system messages hold
+            # memory or reference material.
+            first = state.messages[0] if state.messages else None
+            if first and first.role == "system" and state.scratch.get("instructions", True):
+                first.content = f"{first.content}\n\n{prefix}" if first.content else prefix
             else:
-                system.content = f"{system.content}\n\n{prefix}" if system.content else prefix
+                state.messages.insert(0, Message(role="system", content=prefix))
             state.scratch["react_prompt"] = True
             return _request()
         if not state.history or state.history[-1].action != "model" or state.last_response is None:
