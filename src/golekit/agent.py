@@ -53,7 +53,7 @@ class Agent:
         model: str | Model | ModelClient | None = None,
         *,
         instructions: str | None = None,
-        tools: Iterable[str | Tool] = (),
+        tools: Iterable[str | Tool | Iterable[Tool]] = (),
         memory: str | Memory | None = "session",
         knowledge: Knowledge | str | Path | list[Knowledge | str | Path] | None = None,
         knowledge_mode: str = "auto",
