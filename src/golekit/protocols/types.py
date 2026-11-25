@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from time import time
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -132,6 +133,20 @@ class Trace(BaseModel):
         from ..trace import show
 
         show(self)
+
+    def to_json(self, path: str | Path | None = None) -> str:
+        """Return the events as a JSON document, also writing it to ``path`` when given.
+
+        The document holds the complete conversation, tool arguments and tool results, but
+        no credentials: request headers never enter events. Check its content before
+        sending it to someone else.
+
+        Example:
+            result.trace.to_json("traces/run.json")
+        """
+        from ..trace import to_json
+
+        return to_json(self, path)
 
 
 class Document(BaseModel):

@@ -2,8 +2,12 @@
 
 import json
 import sys
+from pathlib import Path
+from typing import Any
 
-from ..protocols.types import Event, Trace
+from pydantic import BaseModel
+
+from ..protocols.types import Event, Result, Trace
 
 
 def _header(event: Event) -> str:
@@ -74,3 +78,41 @@ def show(trace: Trace) -> None:
     for index, row in enumerate(rows):
         branch = "└─" if index == len(rows) - 1 else "├─"
         print(f"{branch} {row}")
+
+
+def _plain(value: Any) -> Any:
+    if isinstance(value, BaseException):
+        return {"type": type(value).__name__, "message": str(value)}
+    if isinstance(value, BaseModel):
+        # Fields are read one by one: a bulk dump would not let nested values be adapted.
+        fields = type(value).model_fields
+        data = {name: getattr(value, name) for name, field in fields.items() if not field.exclude}
+        data.update(value.model_extra or {})
+        if isinstance(value, Result):
+            # The enclosing document already lists the events of this result.
+            del data["trace"]
+        return _plain(data)
+    if isinstance(value, dict):
+        return {str(key): _plain(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_plain(item) for item in value]
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    return str(value)
+
+
+def to_json(trace: Trace, path: str | Path | None = None) -> str:
+    """Serialize a run's events to one JSON document and optionally write it to a file."""
+    from .. import __version__
+
+    document = {
+        "golekit": __version__,
+        "run_id": trace.events[0].run_id if trace.events else None,
+        "events": [_plain(event) for event in trace.events],
+    }
+    text = json.dumps(document, ensure_ascii=False, indent=2)
+    if path is not None:
+        target = Path(path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text, encoding="utf-8")
+    return text

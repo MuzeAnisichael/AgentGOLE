@@ -11,6 +11,7 @@
 - Added JSON Schema constrained decoding for structured answers, paradigm-internal calls and prompt-mode tool selection, with `gole.Model(constrained=...)` and `Capabilities.json_schema`. A server that rejects the response format is retried without it and remembered.
 - Added context length awareness: `gole.Model(context=...)`, `GOLE_CONTEXT`, `providers.<name>.context` in gole.yaml, and Ollama's explicit `num_ctx`. `model_end` events carry `context_used`, and a prompt at 90% or more logs one warning per run. Nothing is compressed or truncated.
 - `gole doctor` reports constrained decoding support and the context length of each chat model.
+- Added `result.trace.to_json(path=None)`. A failed run's exception carries the recorded events as `exc.trace`. When `GOLE_TRACE_DIR` is set, every run writes `<run_id>.json` there. Traces contain the full conversation and tool arguments.
 - Added summary, SQLite long-term and layered memory, with per-session management and memory tools.
 - Added batched embedding clients and incremental local knowledge indexes with keyword, vector and hybrid retrieval.
 - Added optional PDF and Word loaders via the rag extra.

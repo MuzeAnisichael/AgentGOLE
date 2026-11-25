@@ -2,7 +2,9 @@
 
 import asyncio
 import logging
+import os
 from collections.abc import Awaitable, Callable, Sequence
+from pathlib import Path
 from time import monotonic
 from typing import Any
 
@@ -183,6 +185,17 @@ async def _actions(
     raise MaxStepsError(f"Action limit ({max_steps}) reached. Increase max_steps to continue.")
 
 
+def _export(events: RunEvents) -> None:
+    """Write the trace to GOLE_TRACE_DIR when it is set; a failed write never fails the run."""
+    directory = os.environ.get("GOLE_TRACE_DIR")
+    if not directory:
+        return
+    try:
+        events.trace.to_json(Path(directory).expanduser() / f"{events.run_id}.json")
+    except OSError as exc:
+        _logger.warning("Could not write the run trace to %s: %s", directory, exc)
+
+
 async def execute(
     input: str,
     *,
@@ -275,6 +288,7 @@ async def execute(
                     run_id=ctx.run_id,
                 )
                 await events.send("run_end", result=result, duration=monotonic() - started)
+                _export(events)
                 return result.model_copy(update={"trace": events.trace})
         except TimeoutError as exc:
             if deadline.expired():
@@ -284,6 +298,12 @@ async def execute(
             raise
     except Exception as exc:
         await events.send("error", exception=exc, recoverable=False)
+        # A failed run returns no Result, so the exception carries what was recorded.
+        try:
+            setattr(exc, "trace", events.trace)  # noqa: B010 - not a declared attribute
+        except AttributeError:
+            pass
+        _export(events)
         raise
     finally:
         ctx.report_error = original_report
