@@ -80,8 +80,6 @@ def _discover(sources: Sequence[str | Path]) -> list[str]:
     visited: set[Path] = set()
 
     def visit(path: Path) -> None:
-        if not path.exists():
-            return
         path = path.resolve()
         if path in visited:
             return
@@ -101,11 +99,16 @@ def _discover(sources: Sequence[str | Path]) -> list[str]:
             found[str(source)] = None
             continue
         path = Path(source).expanduser()
-        if not path.exists() and glob.has_magic(str(path)):
-            for match in sorted(glob.iglob(str(path), recursive=True)):
+        if path.exists():
+            visit(path)
+        elif glob.has_magic(str(path)):
+            matches = sorted(glob.iglob(str(path), recursive=True))
+            if not matches:
+                _logger.warning("Knowledge pattern matched no files: %s", path)
+            for match in matches:
                 visit(Path(match))
         else:
-            visit(path)
+            raise ConfigError(f"Knowledge source not found: {path}. Check the path.")
     return list(found)
 
 
