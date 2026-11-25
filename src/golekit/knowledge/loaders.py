@@ -171,12 +171,27 @@ def _load_file(path: Path) -> list[Document]:
     if suffix == ".docx":
         try:
             from docx import Document as WordDocument  # pyright: ignore[reportMissingImports]
+            from docx.table import Table  # pyright: ignore[reportMissingImports]
         except ImportError as exc:
             raise MissingDependencyError(
                 f"Loading DOCX requires python-docx. Run {_INSTALL}."
             ) from exc
-        text = "\n\n".join(paragraph.text for paragraph in WordDocument(str(path)).paragraphs)
-        return [Document(text=text, source=source)]
+        blocks: list[str] = []
+        for block in WordDocument(str(path)).iter_inner_content():
+            if not isinstance(block, Table):
+                blocks.append(block.text)
+                continue
+            lines: list[str] = []
+            for row in block.rows:
+                # A merged cell is reported once per spanned column.
+                cells = [
+                    c
+                    for i, c in enumerate(row.cells)
+                    if i == 0 or c._tc is not row.cells[i - 1]._tc
+                ]
+                lines.append("\t".join(cell.text.strip() for cell in cells))
+            blocks.append("\n".join(lines))
+        return [Document(text="\n\n".join(blocks), source=source)]
     _logger.warning("Skipping unsupported knowledge source: %s", path)
     return []
 

@@ -112,6 +112,14 @@ async def test_docx_preserves_paragraph_order():
     assert docs == [Document(text="First paragraph\n\nSecond paragraph", source=source)]
 
 
+async def test_docx_reads_tables_in_document_order():
+    pytest.importorskip("docx")
+    docs = await load_source(str(FIXTURES / "table.docx"))
+    assert [doc.text for doc in docs] == [
+        "报销标准\n\n项目\t上限\n住宿\t500 元\n合计上限 800 元\n\n超出部分需经理审批。"
+    ]
+
+
 @pytest.mark.parametrize(
     ("module", "name"), [("pypdf", "two-pages.pdf"), ("docx", "paragraphs.docx")]
 )
