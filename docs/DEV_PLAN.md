@@ -142,6 +142,7 @@ agentgole/
 
 目标：多步任务可规划、可自检；小模型工具调用有数据支撑。
 
+- [ ] v0.2 审核遗留修复 R1–R7（见 `reports/v0.2-review.md`）
 - [ ] `paradigms/`：`direct`、`plan_execute`（含重规划）、`reflect`（评审轮数与标准）
 - [ ] 多模型分工：范式、记忆可各自指定模型
 - [ ] `safety/approval`：`confirm=True`、`approval.Console` / `Callback`、`approval_required` 事件
