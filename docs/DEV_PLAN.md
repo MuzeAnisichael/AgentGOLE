@@ -38,7 +38,7 @@ agentgole/
 │   ├── protocols/              # 公开协议：ModelClient · Tool · Paradigm · Memory · Retriever · Engine
 │   ├── kernel/                 # 原生内核（NanoHarness 六关注点）
 │   │   ├── engine.py           #   执行：异步运行循环、Run、Action                     v0.1
-│   │   ├── context.py          #   上下文：组装、token 预算、压缩                       v0.1 / v0.8
+│   │   ├── context.py          #   上下文：组装、长度告警、token 预算、压缩             v0.1 / v0.3 / v0.8
 │   │   ├── state.py            #   状态：检查点存储（SQLite / JSON）                   v0.5
 │   │   ├── events.py           #   生命周期：事件总线、Hook                             v0.1
 │   │   ├── middleware.py       #   中间件链                                              v0.6
@@ -52,7 +52,7 @@ agentgole/
 │   ├── team/                   # router · supervisor · handoff · debate                 v0.5
 │   ├── backends/               # 模式 B 适配器：litellm · mem0 · llamaindex · chroma · qdrant ...  v0.4
 │   ├── engines/                # 模式 C：native · langgraph ...；能力矩阵               v0.7
-│   ├── trace/                  # 终端步骤树 · JSON · HTML · OTel / Langfuse 导出         v0.1 / v0.8
+│   ├── trace/                  # 终端步骤树 · JSON · HTML · OTel / Langfuse 导出         v0.1 / v0.3 / v0.8
 │   ├── safety/                 # 审批 · 沙箱 · 预算 · 注入防护                           v0.3 / v0.8
 │   ├── serve/                  # ASGI：OpenAI 兼容端点、/runs + SSE                     v0.6
 │   ├── registry.py             # 字符串 → 组件；entry points 插件发现                   v0.4 / v0.6
@@ -145,10 +145,12 @@ agentgole/
 - [ ] v0.2 审核遗留修复 R1–R7（见 `reports/v0.2-review.md`）
 - [ ] `paradigms/`：`direct`、`plan_execute`（含重规划）、`reflect`（评审轮数与标准）
 - [ ] 多模型分工：范式、记忆可各自指定模型
-- [ ] `safety/approval`：`confirm=True`、`approval.Console` / `Callback`、`approval_required` 事件
+- [ ] `safety/approval`：`confirm=True`、`approval.Console` / `Callback`、`approval_required` 事件；审批写成工具调用拦截链的一环（D-310）
 - [ ] 内置工具补齐：`web_search`、`web_fetch`、`python`（子进程沙箱）、`files`、`shell`
 - [ ] 降级第二阶段：接入约束解码（Ollama 结构化输出、vLLM guided decoding、llama.cpp GBNF）
-- [ ] `benchmarks/tool_calling`：小模型工具调用成功率基准，结果写进文档
+- [ ] `benchmarks/tool_calling`：小模型工具调用成功率基准，结果写进文档；跑出的真实坏输出收进降级解析的语料测试（D-312）
+- [ ] 上下文长度最小版：可配置、接近上限时告警、`gole doctor` 显示（D-309）；压缩仍在 v0.8
+- [ ] `trace.to_json` 与 `GOLE_TRACE_DIR`（D-311，从 v0.8 提前）
 
 **验收**：L3 示例跑通；基准覆盖至少 3 个本地模型 × native / prompt 两种模式，结果公开。
 
@@ -162,6 +164,9 @@ agentgole/
 
 目标：`backend=` 一个参数切换实现，行为一致由协议测试保证。
 
+- [ ] 模式 C 映射的抛弃式验证（D-010）：在定稿协议测试之前，用一到两天把一个带工具的 Agent 和一个两步流程手工映射到 LangGraph，逐项检查 D-301 的 token 语义、D-304 的默认拒绝、结构化输出纠正、prompt 降级能否对应。产出是一页结论，写明哪些能映射、哪些要列进能力矩阵的「不支持」；代码不合入
+- [ ] 内核整形（D-011）：把运行循环改成可序列化、可逐步推进的 `Run`，模型调用和工具调用都经过同一条拦截链；对外行为不变，由现有单元测试守住。v0.5 的检查点、v0.6 的中间件与手动驱动、v0.7 的引擎都建立在它之上
+- [ ] `user=`（D-012）：`run` 等四个入口增加可选的 `user=`，默认等于 `session`；长期记忆按 `user` 归属，会话记忆仍按 `session`
 - [ ] `registry.py`：字符串 → 组件解析、懒加载，缺依赖时提示安装命令
 - [ ] `tests/conformance/`：`ModelClient`、`Tool`、`Memory`、`Retriever` 协议测试套件，内置实现先全部通过
 - [ ] `backends/`：LiteLLM（模型）、mem0（长期记忆）、LlamaIndex（知识库，含 `Knowledge.from_llamaindex`）
@@ -217,9 +222,9 @@ agentgole/
 
 目标：长时间、无人值守地运行，也要可追溯、可控制。
 
-- [ ] `trace/`：`to_json` / `to_html`、`gole trace`、OpenTelemetry 与 Langfuse 导出
+- [ ] `trace/`：`to_html`、`gole trace`、OpenTelemetry 与 Langfuse 导出（`to_json` 已在 v0.3 提供）
 - [ ] `safety/`：`python` 工具的 Docker 沙箱、提示词注入防护标记、`Webhook` 审批
-- [ ] `kernel/context.py`：上下文预算，长工具结果换成摘要 + 引用，早期对话压缩
+- [ ] `kernel/context.py`：上下文预算，长工具结果换成摘要 + 引用，早期对话压缩（v0.3 已有上下文长度配置和告警）
 - [ ] 并发工具调用、超时与取消
 - [ ] 故障注入测试：工具超时、进程中断、模型返回坏 JSON
 
@@ -261,8 +266,8 @@ agentgole/
 质量门槛：
 
 - `make check` = ruff + pyright（`protocols/`、`kernel/` 用严格模式）+ 单元测试 + 内置实现的协议测试，本地和 CI 是同一条命令。
-- CI：PR 只跑 Linux + Python 3.11；合入 main 时跑 Linux、macOS、Windows × {3.11、当前最新稳定版} 的矩阵。
-- 覆盖率只观察、不追求：v0.9 起才把 `protocols/`、`kernel/` 覆盖率 ≥ 90% 作为门槛，之前不为凑覆盖率写测试。
+- CI：PR 跑 Linux 和 Windows + Python 3.11（D-013）；合入 main 时跑 Linux、macOS、Windows × {3.11、当前最新稳定版} 的矩阵。
+- 覆盖率只观察、不追求：v0.9 起才把 `protocols/`、`kernel/` 覆盖率 ≥ 90% 作为门槛，之前不为凑覆盖率写测试。降级解析的语料测试是例外，样本数量不设上限（D-013）。
 - 每个 PR 带测试和 CHANGELOG 条目；改动公共 API 时，在阶段报告里列出，由审核方同步更新 SPEC。
 
 发布流程：

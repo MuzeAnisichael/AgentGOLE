@@ -417,13 +417,14 @@ smart = gole.Model("deepseek/deepseek-chat", temperature=0.3, max_tokens=4096, t
 local = gole.Model("Qwen2.5-7B-Instruct", base_url="http://localhost:8000/v1", api_key="EMPTY")
 
 fast.generate("你好")     # 不经过 Agent，直接调用模型
-fast.capabilities          # Capabilities(tools=True, json_mode=False, vision=False, context=None)，首次访问时探测并缓存
+fast.capabilities          # Capabilities(tools=True, json_mode=False, json_schema=True, vision=False, context=None)，首次访问时探测并缓存
 
 embed = gole.Embedding("ollama/bge-m3")   # 嵌入模型，供记忆与知识库使用
 ```
 
 - **工具调用降级**：`tool_mode="auto"`（默认）先探测模型能力，支持原生函数调用就用原生，否则用提示词约定格式并解析；也可以强制指定 `"native"` 或 `"prompt"`。`gole.Model` 和 `gole.Agent` 都接受 `tool_mode`，Agent 上的设置优先；没有注册任何工具时，不使用提示词协议，直接对话。
 - **降级分阶段建设**：v0.1 提供通用 ReAct 模板、损坏 JSON 修复和带报错信息的重试；v0.3 起接入推理后端的约束解码（Ollama 结构化输出、vLLM guided decoding、llama.cpp GBNF），并发布小模型工具调用成功率基准。后端支持按 JSON Schema 约束输出时自动启用，`gole.Model(..., constrained=True / False)` 可以强制开关。
+- **上下文长度**：本地推理服务实际可用的上下文往往比模型标称的小，超出的部分会被静默截断。`gole.Model(..., context=8192)`、环境变量 `GOLE_CONTEXT` 或 gole.yaml 的 `providers.<provider>.context` 可以把实际值告诉 AgentGOLE；提示词用量达到 90% 时会记一条 warning，`model_end` 事件带 `context_used`，`gole doctor` 也会显示这个值。自动压缩在 v0.8 提供。
 - **多模型分工**：记忆摘要、规划、评审等环节可以各自指定模型，例如用小模型做摘要：`gole.Agent(model=smart, memory=gole.memory.Summary(model=fast))`。
 
 ### 6.2 Tool 工具
@@ -519,7 +520,7 @@ agent.memory.clear(session="u42")
 ```
 
 - **写入时机**：长期记忆默认在每轮结束后异步抽取（`write="after_run"`）；设为 `"tool"` 则把 remember / recall 交给模型自主调用。抽取在最终回答发出之后、`run` 返回之前完成，不阻塞流式输出；抽取失败只发一个可恢复的 `error` 事件，不影响本轮回答。
-- **隔离**：长期记忆按 `session` 隔离，一个 session 写入的事实不会出现在另一个 session 里。把 `session` 设为用户或对话的标识即可。
+- **隔离**：长期记忆按 `session` 隔离，一个 session 写入的事实不会出现在另一个 session 里。把 `session` 设为用户或对话的标识即可。v0.4 起可以另外传 `user=`（默认等于 `session`）：长期记忆按 `user` 归属，同一个用户的多段对话就能共享长期记忆，会话记忆仍按 `session` 区分。
 - **存储位置**：内置实现默认写入 `./.gole/memory.db`（SQLite），单机可用；多实例部署时应切换到外部后端。
 
 ### 6.5 Knowledge 知识库
@@ -710,21 +711,32 @@ agent = gole.Agent(memory="redis")       # 注册后就能用字符串引用
 
 第三方包通过 Python entry points（`agentgole.plugins`）自动注册，例如 `pip install agentgole-redis` 后直接写 `memory="redis"`。
 
-自定义范式通过返回 `Action` 告诉运行时下一步做什么（`CallModel`、`CallTool`、`Delegate`、`AskHuman`、`Finish`）：
+自定义范式通过返回 `Action` 告诉运行时下一步做什么（`CallModel`、`CallTool`、`Delegate`、`AskHuman`、`Finish`）。范式自己不直接调用模型：每一次模型调用都以 `CallModel` 交给运行时，这样事件、用量统计和步数上限才完整。`CallModel` 可以用 `model=` 指定另一个模型，用 `visible=False` 表示这次的文本是中间产物、不作为 token 发给用户，用 `response_schema=` 要求回复满足某个 JSON Schema；回复在下一次 `step` 的 `state.last_response` 里。
 
 ```python
+import json
 from agentgole import actions
+
+SUBQUESTIONS = {"type": "array", "items": {"type": "string"}}
 
 class SelfAsk(gole.Paradigm):
     """先把问题拆成子问题，逐个回答后汇总"""
     async def step(self, state, ctx):
-        if state.turn == 0:
-            state.scratch["todo"] = await ctx.model.generate(
-                f"把问题拆成子问题：{state.input}", output=list[str])
-        if state.scratch["todo"]:
-            q = state.scratch["todo"].pop(0)
-            return actions.Delegate(q, paradigm="react")    # 子问题交给 ReAct 解决
-        return actions.Finish(await ctx.model.generate(f"汇总以下答案：{state.history}"))
+        phase = state.scratch.setdefault("phase", "split")
+        if phase == "split":                       # 第 1 步：请模型拆解问题
+            state.scratch["phase"] = "solve"
+            ask = {"role": "user", "content": f"把问题拆成子问题：{state.input}"}
+            return actions.CallModel(messages=[ask], visible=False, response_schema=SUBQUESTIONS)
+        if phase == "solve":
+            if "todo" not in state.scratch:        # 上一步的回复就是子问题列表
+                state.scratch["todo"] = json.loads(state.last_response.content)
+            if state.scratch["todo"]:
+                q = state.scratch["todo"].pop(0)
+                return actions.Delegate(q, paradigm="react")    # 子问题交给 ReAct 解决
+            state.scratch["phase"] = "answer"
+            ask = {"role": "user", "content": f"汇总以下答案：{state.history}"}
+            return actions.CallModel(messages=[ask])            # 最终回答，逐 token 发出
+        return actions.Finish(state.last_response.content)
 ```
 
 ### 8.4 手动驱动运行循环
@@ -776,7 +788,8 @@ paradigm: reflect
 ### 9.1 运行轨迹
 
 - `gole.Agent(..., verbose=True)`：在终端实时打印步骤树。
-- `result.trace.show()` / `.to_json()` / `.to_html("trace.html")`：事后查看或导出。
+- `result.trace.show()` / `.to_json("trace.json")` / `.to_html("trace.html")`：事后查看或导出。运行失败时，轨迹在异常的 `trace` 属性上。
+- 环境变量 `GOLE_TRACE_DIR`：设置后，每次运行结束或失败时自动把轨迹写成 `<目录>/<run_id>.json`，方便把出问题的运行发给别人分析。轨迹里有完整的对话内容，发出前先检查。
 - `gole.trace.export("otel")` 或 `"langfuse"`：接入已有的观测平台。
 
 ```text
