@@ -115,7 +115,10 @@ def python(timeout: float = 10, confirm: bool = True) -> Tool:
         Args:
             code: Complete Python source. Use print() to produce output.
         """
-        with tempfile.TemporaryDirectory(prefix="gole-python-") as directory:
+        # On Windows a process that is still exiting can keep the directory busy for a moment.
+        with tempfile.TemporaryDirectory(
+            prefix="gole-python-", ignore_cleanup_errors=True
+        ) as directory:
             script = Path(directory) / "main.py"
             script.write_text(code, encoding="utf-8")
             env = {name: os.environ[name] for name in _KEPT_ENV if name in os.environ}
