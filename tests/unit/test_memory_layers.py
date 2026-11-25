@@ -137,7 +137,7 @@ def test_external_memory_backend_reports_version():
         LongTerm(backend="mem0")
 
 
-async def test_layered_save_exposes_model_errors_to_callers(tmp_path):
+async def test_layered_save_failure_is_reported_without_failing_the_run(tmp_path):
     from golekit import Agent
     from golekit.errors import ModelError
 
@@ -148,6 +148,9 @@ async def test_layered_save_exposes_model_errors_to_callers(tmp_path):
             return await super().generate(messages, **kwargs)
 
     memory = Layered(short=Window(), long=LongTerm(tmp_path / "facts.db"))
-    with pytest.raises(ModelError, match="extraction unavailable"):
-        await Agent(FailedExtraction(["ok"]), memory=memory).arun("remember")
+    result = await Agent(FailedExtraction(["ok"]), memory=memory).arun("remember")
+    assert result.text == "ok"
+    errors = [e for e in result.trace.events if e.type == "error"]
+    assert len(errors) == 1 and errors[0].recoverable
+    assert isinstance(errors[0].exception, ModelError)
     assert memory.export()["short"]["messages"][-1]["content"] == "ok"
