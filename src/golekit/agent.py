@@ -23,7 +23,7 @@ from .protocols.types import Chunk, Event, Result, ToolMode
 from .tools import resolve_tools
 from .trace import LiveTrace
 
-logger = logging.getLogger("agentgole.agent")
+logger = logging.getLogger("golekit.agent")
 
 
 class _KnowledgeRetriever:

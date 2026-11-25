@@ -1,4 +1,4 @@
-# AgentGOLE 开发指导
+# GoleKit 开发指导
 
 本文规定**怎么做**：工程约定、版本流程、multi-agent 分工、测试纪律、Git 规范，以及与审核方的协作循环。**做什么**由 `docs/tasks/v0.X.md` 和 `docs/SPEC.md` 规定。
 
@@ -18,11 +18,11 @@
 - **异步优先**：所有 I/O 都写成 async。同步 API 只在 `_sync.py` 里统一包装，其他地方禁止直接调用 `asyncio.run`。
 - **数据类型**：跨模块传递的数据统一用 pydantic v2 模型（`Message`、`ToolCall`、`ToolSpec`、`Usage`、`Event` 等），集中定义在 `protocols/types.py`。
 - **协议**：组件接口用 `typing.Protocol` 定义，放在 `protocols/`；只在确实需要做运行时检查时才加 `runtime_checkable`。
-- **公共 API**：只从 `agentgole/__init__.py` 导出，并用 `__all__` 显式列出。其余模块都算内部实现，可以随时调整。
+- **公共 API**：只从 `golekit/__init__.py` 导出，并用 `__all__` 显式列出。其余模块都算内部实现，可以随时调整。
 - **可选依赖**：只能在函数内部 import；捕获 `ImportError` 后，抛出带安装命令的 `MissingDependencyError`。
 - **配置优先级**：显式参数 > 环境变量 > `gole.yaml` > 默认值。密钥只从环境变量读取，绝不写进日志或报错信息。
-- **错误**：异常统一定义在 `errors.py`，基类为 `AgentGoleError`。面向用户的报错要告诉对方下一步怎么做，例如缺少的环境变量名、该装的 extra。
-- **日志**：用 `logging.getLogger("agentgole.<module>")`。库代码不 `print`（CLI 和 `verbose` 输出除外），也不配置 root logger。
+- **错误**：异常统一定义在 `errors.py`，基类为 `GoleError`。面向用户的报错要告诉对方下一步怎么做，例如缺少的环境变量名、该装的 extra。
+- **日志**：用 `logging.getLogger("golekit.<module>")`。库代码不 `print`（CLI 和 `verbose` 输出除外），也不配置 root logger。
 - **禁止**：
   - import 时发起网络请求或读写文件；
   - 全局可变单例（注册表除外）；
@@ -83,7 +83,7 @@
 
 以下文件只有 Lead 能改；Builder 需要改时，在回报里提出：
 
-`pyproject.toml`、`Makefile`、`src/agentgole/__init__.py`、`src/agentgole/errors.py`、`src/agentgole/protocols/**`、`tests/conftest.py`、`CHANGELOG.md`、CI 配置。
+`pyproject.toml`、`Makefile`、`src/golekit/__init__.py`、`src/golekit/errors.py`、`src/golekit/protocols/**`、`tests/conftest.py`、`CHANGELOG.md`、CI 配置。
 
 如果环境支持隔离工作区（git worktree 或独立分支），每个 Builder 用一个；不支持的话，就靠文件归属来避免冲突。
 

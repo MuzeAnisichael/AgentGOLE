@@ -5,9 +5,9 @@ from pathlib import Path
 import httpx
 import pytest
 
-from agentgole.errors import MissingDependencyError
-from agentgole.knowledge.loaders import discover_sources, load_source
-from agentgole.protocols.types import Document
+from golekit.errors import MissingDependencyError
+from golekit.knowledge.loaders import discover_sources, load_source
+from golekit.protocols.types import Document
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 
@@ -91,11 +91,11 @@ async def test_missing_format_dependency_provides_install_command(module, name, 
     monkeypatch.setitem(sys.modules, module, None)
     with pytest.raises(MissingDependencyError) as exc:
         await load_source(str(FIXTURES / name))
-    assert 'pip install "agentgole[rag]"' in str(exc.value)
+    assert 'pip install "golekit[rag]"' in str(exc.value)
 
 
 async def test_unavailable_url_reports_actionable_error_without_query_credentials():
-    from agentgole.errors import ConfigError
+    from golekit.errors import ConfigError
 
     with pytest.raises(ConfigError, match="HTTP 404") as caught:
         await load_source(

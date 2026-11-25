@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-import agentgole as gole
+import golekit as gole
 
 
 def main() -> gole.Result:

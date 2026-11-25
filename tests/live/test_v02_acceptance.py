@@ -11,8 +11,8 @@ import pytest
 import yaml
 from pydantic import BaseModel
 
-import agentgole as gole
-from agentgole.config import load_config
+import golekit as gole
+from golekit.config import load_config
 
 pytestmark = pytest.mark.live
 EXAMPLES = Path(__file__).resolve().parents[2] / "examples"

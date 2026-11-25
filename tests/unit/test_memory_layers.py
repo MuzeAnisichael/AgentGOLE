@@ -5,10 +5,10 @@ from contextlib import closing
 
 import pytest
 
-from agentgole.errors import ConfigError
-from agentgole.memory import Layered, LongTerm, Summary, Window
-from agentgole.protocols.types import Message
-from agentgole.testing import FakeEmbedding, FakeModel
+from golekit.errors import ConfigError
+from golekit.memory import Layered, LongTerm, Summary, Window
+from golekit.protocols.types import Message
+from golekit.testing import FakeEmbedding, FakeModel
 
 
 def turn(user: str, reply: str = "好") -> list[Message]:
@@ -138,8 +138,8 @@ def test_external_memory_backend_reports_version():
 
 
 async def test_layered_save_exposes_model_errors_to_callers(tmp_path):
-    from agentgole import Agent
-    from agentgole.errors import ModelError
+    from golekit import Agent
+    from golekit.errors import ModelError
 
     class FailedExtraction(FakeModel):
         async def generate(self, messages, **kwargs):

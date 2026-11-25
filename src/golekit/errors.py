@@ -1,15 +1,15 @@
-"""Exceptions raised by AgentGOLE components."""
+"""Exceptions raised by GoleKit components."""
 
 
-class AgentGoleError(Exception):
-    """Base exception for AgentGOLE errors."""
+class GoleError(Exception):
+    """Base exception for GoleKit errors."""
 
 
-class ConfigError(AgentGoleError):
+class ConfigError(GoleError):
     """A model or component could not be configured."""
 
 
-class ModelError(AgentGoleError):
+class ModelError(GoleError):
     """A model request failed."""
 
 
@@ -17,21 +17,21 @@ class UnsupportedToolsError(ModelError):
     """The server explicitly rejected native tools on a chat request."""
 
 
-class ToolError(AgentGoleError):
+class ToolError(GoleError):
     """A tool could not validate or execute a call."""
 
 
-class MaxStepsError(AgentGoleError):
+class MaxStepsError(GoleError):
     """The run exhausted its action budget."""
 
 
-class RunTimeoutError(AgentGoleError):
+class RunTimeoutError(GoleError):
     """The run exceeded its time budget."""
 
 
-class MissingDependencyError(AgentGoleError):
+class MissingDependencyError(GoleError):
     """An optional dependency is missing."""
 
 
-class OutputValidationError(AgentGoleError):
+class OutputValidationError(GoleError):
     """The final response still fails its requested schema after corrections."""

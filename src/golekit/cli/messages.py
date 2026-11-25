@@ -1,6 +1,6 @@
 """Chinese copy and starter files used by the command-line interface."""
 
-DESCRIPTION = "配置、检查和运行 AgentGOLE。"
+DESCRIPTION = "配置、检查和运行 GoleKit。"
 INIT_HELP = "生成 gole.yaml 与示例代码"
 DOCTOR_HELP = "检查模型连通性与能力"
 CHAT_HELP = "在终端与 Agent 对话"
@@ -36,7 +36,7 @@ providers:
     api_key: ${DEEPSEEK_API_KEY}
 """
 EXAMPLE = """\
-import agentgole as gole
+import golekit as gole
 
 agent = gole.Agent()
 if __name__ == "__main__":

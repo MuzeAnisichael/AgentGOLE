@@ -25,7 +25,7 @@ from ..tools.function import tool
 if TYPE_CHECKING:
     from ..models.embedding import Embedding
 
-_log = logging.getLogger("agentgole.memory.longterm")
+_log = logging.getLogger("golekit.memory.longterm")
 
 
 def _unit(vector: list[float]) -> array[float]:

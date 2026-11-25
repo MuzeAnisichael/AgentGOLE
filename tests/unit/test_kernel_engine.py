@@ -4,10 +4,10 @@ from typing import Any
 
 import pytest
 
-from agentgole.errors import MaxStepsError, ModelError, RunTimeoutError, UnsupportedToolsError
-from agentgole.kernel.engine import execute
-from agentgole.protocols import StepContext
-from agentgole.protocols.types import (
+from golekit.errors import MaxStepsError, ModelError, RunTimeoutError, UnsupportedToolsError
+from golekit.kernel.engine import execute
+from golekit.protocols import StepContext
+from golekit.protocols.types import (
     Action,
     CallModel,
     CallTool,
@@ -19,7 +19,7 @@ from agentgole.protocols.types import (
     ToolSpec,
     Usage,
 )
-from agentgole.testing import FakeModel, fake_tool_call
+from golekit.testing import FakeModel, fake_tool_call
 
 
 def field(event: Event, name: str) -> Any:
@@ -267,7 +267,7 @@ async def test_finish_supplies_token_before_step_if_marker_absent():
 
 
 async def test_malformed_native_arguments_become_one_observation():
-    from agentgole.models.wire import completed_response
+    from golekit.models.wire import completed_response
 
     calls = completed_response(
         {

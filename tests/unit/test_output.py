@@ -3,9 +3,9 @@
 import pytest
 from pydantic import BaseModel
 
-import agentgole as gole
-from agentgole.errors import MaxStepsError, OutputValidationError
-from agentgole.testing import FakeModel
+import golekit as gole
+from golekit.errors import MaxStepsError, OutputValidationError
+from golekit.testing import FakeModel
 
 
 class Paper(BaseModel):

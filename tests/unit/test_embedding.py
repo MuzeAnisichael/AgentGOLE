@@ -3,10 +3,10 @@ import json
 import httpx
 import pytest
 
-from agentgole.errors import ConfigError, ModelError
-from agentgole.models import create_client, embedding
-from agentgole.models.embedding import Embedding, resolve_embedding
-from agentgole.testing import FakeEmbedding
+from golekit.errors import ConfigError, ModelError
+from golekit.models import create_client, embedding
+from golekit.models.embedding import Embedding, resolve_embedding
+from golekit.testing import FakeEmbedding
 
 
 def use_transport(monkeypatch, callback):

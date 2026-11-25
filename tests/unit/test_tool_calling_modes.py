@@ -2,9 +2,9 @@
 
 import pytest
 
-import agentgole as gole
-from agentgole.errors import UnsupportedToolsError
-from agentgole.testing import FakeModel, fake_tool_call
+import golekit as gole
+from golekit.errors import UnsupportedToolsError
+from golekit.testing import FakeModel, fake_tool_call
 
 
 @gole.tool
@@ -47,7 +47,7 @@ async def test_server_rejection_persists_on_shared_model(monkeypatch):
             return await super().generate(messages, tools=tools, **params)
 
     fake = RejectingModel(["Final Answer:one", "Final Answer:two"])
-    monkeypatch.setattr("agentgole.model.create_client", lambda *args, **kwargs: fake)
+    monkeypatch.setattr("golekit.model.create_client", lambda *args, **kwargs: fake)
     shared = gole.Model("ollama/demo")
     agent = gole.Agent(shared, tools=[weather])
     result = await agent.arun("one")
@@ -59,7 +59,7 @@ async def test_server_rejection_persists_on_shared_model(monkeypatch):
 
 @pytest.mark.parametrize("prefix", ["", "begin"])
 async def test_direct_stream_completes_missing_deltas(prefix):
-    from agentgole.protocols.types import ModelChunk
+    from golekit.protocols.types import ModelChunk
 
     class Partial(FakeModel):
         async def stream(self, messages, **kwargs):

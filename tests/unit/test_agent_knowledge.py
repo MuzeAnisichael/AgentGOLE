@@ -2,9 +2,9 @@
 
 import pytest
 
-import agentgole as gole
-from agentgole.errors import ConfigError
-from agentgole.testing import FakeModel, fake_tool_call
+import golekit as gole
+from golekit.errors import ConfigError
+from golekit.testing import FakeModel, fake_tool_call
 
 
 @pytest.mark.parametrize(
@@ -44,7 +44,7 @@ def test_ask_uses_context_and_default_model(tmp_path, monkeypatch):
     source.write_text("议程：周三组会。", encoding="utf-8")
     model = FakeModel(["周三"])
     monkeypatch.setenv("GOLE_MODEL", "ollama/test")
-    monkeypatch.setattr("agentgole.agent.create_client", lambda *args, **kw: model)
+    monkeypatch.setattr("golekit.agent.create_client", lambda *args, **kw: model)
     kb = gole.Knowledge(source, retriever="keyword", store=tmp_path)
     result = kb.ask("组会")
     assert result.text == "周三" and result.citations[0].source.endswith("agenda.txt")
@@ -52,8 +52,8 @@ def test_ask_uses_context_and_default_model(tmp_path, monkeypatch):
 
 
 def test_memory_resolves_default_embeddings_only_if_needed(tmp_path, monkeypatch):
-    from agentgole.memory import LongTerm
-    from agentgole.testing import FakeEmbedding
+    from golekit.memory import LongTerm
+    from golekit.testing import FakeEmbedding
 
     monkeypatch.setenv("GOLE_EMBEDDING", "openai/text-embedding-3-small")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)

@@ -2,7 +2,7 @@
 
 import argparse
 
-import agentgole as gole
+import golekit as gole
 
 
 def main() -> None:

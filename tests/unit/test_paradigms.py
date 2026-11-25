@@ -2,9 +2,9 @@ from unittest.mock import AsyncMock
 
 from pydantic import BaseModel, Field
 
-from agentgole.paradigms import Auto, React
-from agentgole.protocols import StepContext
-from agentgole.protocols.types import (
+from golekit.paradigms import Auto, React
+from golekit.protocols import StepContext
+from golekit.protocols.types import (
     CallModel,
     CallTool,
     Finish,
@@ -14,7 +14,7 @@ from agentgole.protocols.types import (
     ToolCall,
     ToolSpec,
 )
-from agentgole.tools import tool
+from golekit.tools import tool
 
 
 class ExternalTool:

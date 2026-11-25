@@ -1,4 +1,4 @@
-# AgentGOLE 开发计划与路线图（v0.1 → v1.0）
+# GoleKit 开发计划与路线图（v0.1 → v1.0）
 
 > 本文件导出自项目文档「开发计划与路线图」页（2026-11-12）。版本范围以本文为准；每个版本开工前，会另外下发 `docs/tasks/v0.X.md` 任务书，任务书里的细节优先于本文。
 
@@ -20,14 +20,14 @@
 仓库采用 `src/` 布局，每个模块对应使用文档里的一类组件；右侧标注的是该模块在哪个版本引入。v0.1 只建 `config`、`protocols`、`kernel`、`models`、`tools`、`paradigms`、`memory`、`trace`、`cli` 九个目录（外加 `_sync.py`、`errors.py`、`testing/`），其余目录到对应版本再建。
 
 ```text
-agentgole/
+golekit/
 ├── pyproject.toml              # 核心依赖 httpx / pydantic / pyyaml；extras: rag, mcp, mem0, llamaindex, langgraph, litellm, otel, all
 ├── Makefile                    # make check（唯一的本地/CI 检查入口）
 ├── AGENTS.md                   # 编码 Agent 的工作规则（必读）
 ├── README.md · README.zh.md · CHANGELOG.md · LICENSE (Apache-2.0) · NOTICE
 ├── docs/                       # SPEC.md · DEV_PLAN.md · DEV_GUIDE.md · REPORT_TEMPLATE.md · tasks/
 ├── reports/                    # 每个版本一份阶段报告
-├── src/agentgole/
+├── src/golekit/
 │   ├── __init__.py             # 公共 API 出口：Agent, Model, Embedding, tool, mcp, Knowledge, prompt, Team, register ...
 │   ├── agent.py                # 公共 API：Agent、Result                               v0.1
 │   ├── model.py                # 公共 API：Model（包装 models/ 中的客户端）              v0.1
@@ -69,7 +69,7 @@ agentgole/
 模块依赖规则（v0.4 起在 CI 里用 import-linter 一类工具强制检查，之前靠评审）：
 
 - `protocols/` 不依赖任何其他模块；`kernel/` 只依赖 `protocols/`。
-- `backends/` 和 `engines/` 只依赖 `protocols/` 与公共 API；第三方库一律在函数内懒加载，`import agentgole` 不得触发任何 extras 的导入。
+- `backends/` 和 `engines/` 只依赖 `protocols/` 与公共 API；第三方库一律在函数内懒加载，`import golekit` 不得触发任何 extras 的导入。
 - 组件之间不互相导入：Agent 通过 `registry` 按字符串解析组件，这是 `backend=`、`engine=` 和插件能工作的前提。
 
 ## 3. 路线图总览
@@ -190,12 +190,12 @@ agentgole/
 
 ### v0.6 内核开放与服务化（L5）
 
-目标：开发者能以 AgentGOLE 为内核做扩展和部署。
+目标：开发者能以 GoleKit 为内核做扩展和部署。
 
 - [ ] `protocols/` 定稿并写成文档；`Action` 补齐 `Delegate`、`AskHuman`
 - [ ] `kernel/middleware.py`：`Retry`、`TokenBudget`、`Cache`、`PIIMask`；`@agent.middleware`
 - [ ] 手动驱动：`agent.start()` 逐步迭代，`execute` / `reject`
-- [ ] 插件机制：`gole.register` + entry points（`agentgole.plugins`），附一个示例插件包
+- [ ] 插件机制：`gole.register` + entry points（`golekit.plugins`），附一个示例插件包
 - [ ] 序列化：`agent.save` / `Agent.load`（YAML，不含密钥）
 - [ ] `serve/`：`gole serve`（OpenAI 兼容 `/v1/chat/completions`、`/runs` + SSE、`/health`）与 `gole.asgi`
 
@@ -212,7 +212,7 @@ agentgole/
 目标：`engine="langgraph"` 下，同一段业务代码交给 LangGraph 运行。
 
 - [ ] `engines/`：`Engine` 协议、能力矩阵、`EngineCapabilityError`、`gole engines`
-- [ ] `engines/langgraph`：Agent 与 Workflow 映射为 LangGraph 图；工具、记忆映射；回调桥接为 AgentGOLE 事件
+- [ ] `engines/langgraph`：Agent 与 Workflow 映射为 LangGraph 图；工具、记忆映射；回调桥接为 GoleKit 事件
 - [ ] `flow.compile("langgraph")` 与 `agent.native`
 - [ ] `tests/crossmode/`：同一套 Cookbook 用例在 A / B / C 三种模式下运行
 

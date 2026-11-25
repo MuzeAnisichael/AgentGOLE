@@ -9,13 +9,13 @@ from pathlib import Path
 
 import httpx
 
-from agentgole.errors import ConfigError, MissingDependencyError
-from agentgole.protocols.types import Document
+from golekit.errors import ConfigError, MissingDependencyError
+from golekit.protocols.types import Document
 
 _logger = logging.getLogger(__name__)
 _TEXT = {".txt", ".md", ".markdown"}
 _SUPPORTED = _TEXT | {".pdf", ".docx"}
-_INSTALL = 'pip install "agentgole[rag]"'
+_INSTALL = 'pip install "golekit[rag]"'
 _HIDDEN_TAGS = {"head", "script", "style", "template", "title"}
 _VOID_TAGS = {
     "area",
