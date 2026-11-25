@@ -112,10 +112,16 @@ def _chat(target: str | None, model: str | None) -> int:
         elif prompt:
             wrote_text = False
             try:
-                for ev in agent.stream(prompt, session=session, events=["token", "run_end"]):
+                kinds = ["token", "tool_call", "run_end"]
+                for ev in agent.stream(prompt, session=session, events=kinds):
                     if ev.type == "token":
                         print(ev.text, end="", flush=True)
                         wrote_text = True
+                    elif ev.type == "tool_call":
+                        # Text streamed before a tool call is not part of the final answer.
+                        if wrote_text:
+                            print()
+                        wrote_text = False
                     elif not wrote_text:
                         print(ev.result.text, end="")
             except (GoleError, OSError) as exc:

@@ -88,6 +88,30 @@ def test_chat_recovers_after_failed_turn(monkeypatch, capsys):
     assert "first turn failed" in output.err and "recovered" in output.out
 
 
+def test_chat_separates_text_before_a_tool_call(monkeypatch, capsys):
+    from golekit import Agent, tool
+    from golekit.testing import FakeModel, fake_tool_call
+
+    class Narrating(FakeModel):
+        async def generate(self, messages, **kwargs):
+            response = await super().generate(messages, **kwargs)
+            if response.message.tool_calls:
+                response.message.content = "Checking."
+            return response
+
+    @tool
+    def clock() -> str:
+        """Tell the time."""
+        return "noon"
+
+    model = Narrating([fake_tool_call("clock", {}), "It is noon."])
+    monkeypatch.setattr(cli, "_load_agent", lambda *args: Agent(model, tools=[clock]))
+    inputs = iter(["time?", "/exit"])
+    monkeypatch.setattr("builtins.input", lambda _: next(inputs))
+    assert cli.main(["chat", "agent.py:agent"]) == 0
+    assert capsys.readouterr().out.splitlines() == ["Checking.", "It is noon."]
+
+
 def test_kb_build_prints_incremental_counts(tmp_path, monkeypatch, capsys):
     from golekit.testing import FakeEmbedding
 

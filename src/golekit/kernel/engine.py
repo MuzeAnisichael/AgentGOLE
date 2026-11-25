@@ -33,6 +33,17 @@ from .evaluator import call_model, call_tools
 from .events import RunEvents
 
 
+def _answer_tokens(events: RunEvents) -> str:
+    """Join the tokens emitted since the last tool result."""
+    texts: list[str] = []
+    for event in reversed(events.trace.events):
+        if event.type == "tool_result":
+            break
+        if event.type == "token":
+            texts.append(event.text)
+    return "".join(reversed(texts))
+
+
 async def _actions(
     state: RunState,
     paradigm: Paradigm,
@@ -60,8 +71,11 @@ async def _actions(
         thought: str | None = None
         if isinstance(action, CallModel):
             try:
+                # Native text is forwarded as it arrives, even when a tool call may follow it.
                 # ReAct's explicit answer marker also makes subsequent text final.
-                immediate = builtin_stream and (not ctx.tools or bool(action.emit_tokens_after))
+                immediate = builtin_stream and (
+                    ctx.tool_mode == "native" or not ctx.tools or bool(action.emit_tokens_after)
+                )
                 pending_tokens = None if immediate else []
                 response = await call_model(
                     action, state.messages, ctx, streaming, events, pending_tokens
@@ -112,7 +126,7 @@ async def _actions(
                     next_action = CallModel(use_tools=False)
             if streaming and next_action is None:
                 if pending_tokens is None:
-                    emitted = "".join(e.text for e in events.trace.events if e.type == "token")
+                    emitted = _answer_tokens(events)
                     if not action.output.startswith(emitted):
                         raise ModelError("Streamed text differs from the completed model response.")
                     pieces = [action.output[len(emitted) :]]
