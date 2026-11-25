@@ -9,7 +9,8 @@
 - Added the built-in tools `web_search` (DuckDuckGo or Tavily), `web_fetch`, `python`, `shell` and `gole.tools.files(root, write=False)`. `python` and `shell` need confirmation by default; `python` isolation is best effort, not a security boundary.
 - `tools=` accepts lists of tools. gole.yaml accepts `tools.web_search.provider`; `GOLE_SEARCH_PROVIDER` overrides it.
 - Added JSON Schema constrained decoding for structured answers, paradigm-internal calls and prompt-mode tool selection, with `gole.Model(constrained=...)` and `Capabilities.json_schema`. A server that rejects the response format is retried without it and remembered.
-- `gole doctor` reports constrained decoding support for each chat model.
+- Added context length awareness: `gole.Model(context=...)`, `GOLE_CONTEXT`, `providers.<name>.context` in gole.yaml, and Ollama's explicit `num_ctx`. `model_end` events carry `context_used`, and a prompt at 90% or more logs one warning per run. Nothing is compressed or truncated.
+- `gole doctor` reports constrained decoding support and the context length of each chat model.
 - Added summary, SQLite long-term and layered memory, with per-session management and memory tools.
 - Added batched embedding clients and incremental local knowledge indexes with keyword, vector and hybrid retrieval.
 - Added optional PDF and Word loaders via the rag extra.

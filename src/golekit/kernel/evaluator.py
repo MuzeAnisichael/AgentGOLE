@@ -1,6 +1,7 @@
 """Execute model and tool actions chosen by the paradigm."""
 
 import json
+import logging
 from time import monotonic
 from typing import Any
 
@@ -18,7 +19,10 @@ from ..protocols.types import (
     ToolSpec,
 )
 from .chain import Refusal, run_tool
+from .context import estimate_tokens
 from .events import RunEvents
+
+_logger = logging.getLogger("golekit.kernel.evaluator")
 
 
 class ModelCalls:
@@ -27,6 +31,7 @@ class ModelCalls:
     def __init__(self, ctx: StepContext) -> None:
         self._ctx = ctx
         self._known: dict[int, Capabilities] = {}
+        self._warned = False
 
     async def capabilities(self, client: ModelClient) -> Capabilities:
         """Resolve a client's features once per run."""
@@ -35,6 +40,30 @@ class ModelCalls:
             shared = self._ctx.capabilities if client is self._ctx.model else None
             self._known[key] = await (shared() if shared is not None else client.probe())
         return self._known[key]
+
+    async def context_used(
+        self, client: ModelClient, messages: list[Message], response: ModelResponse
+    ) -> float | None:
+        """Return the share of the context taken by the prompt, warning once when it is nearly full."""
+        limit = (await self.capabilities(client)).context
+        if not limit:
+            return None
+        prompt = response.usage.prompt_tokens or sum(
+            estimate_tokens(message.content or "") for message in messages
+        )
+        used = prompt / limit
+        if used >= 0.9 and not self._warned:
+            self._warned = True
+            _logger.warning(
+                "The prompt for %s uses %d of %d context tokens (%.0f%%); the server may "
+                "truncate it silently. Raise the server's context length (num_ctx on Ollama) "
+                "and pass the new value with context= or GOLE_CONTEXT.",
+                client.name,
+                prompt,
+                limit,
+                used * 100,
+            )
+        return used
 
     def reject_schema(self, client: ModelClient) -> None:
         """Stop sending JSON Schema response formats to a client that refused one."""
@@ -103,6 +132,7 @@ async def call_model(
         usage=response.usage,
         tool_calls=response.message.tool_calls,
         duration=monotonic() - started,
+        context_used=await calls.context_used(client, messages, response),
     )
     return response
 

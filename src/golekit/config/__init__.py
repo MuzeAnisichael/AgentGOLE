@@ -62,7 +62,7 @@ def load_config() -> dict[str, Any]:
         providers = {}
         for name, value in _mapping(config["providers"], "providers").items():
             fields = _mapping(value, f"providers.{name}")
-            settings: dict[str, str] = {}
+            settings: dict[str, Any] = {}
             if "base_url" in fields:
                 settings["base_url"] = _string(fields["base_url"], f"providers.{name}.base_url")
             if "api_key" in fields:
@@ -73,6 +73,13 @@ def load_config() -> dict[str, Any]:
                         "using ${VARIABLE_NAME}."
                     )
                 settings["api_key"] = _expand(reference)
+            if "context" in fields:
+                size = fields["context"]
+                if isinstance(size, bool) or not isinstance(size, int) or size < 1:
+                    raise ConfigError(
+                        f"Use a positive token count for providers.{name}.context in gole.yaml."
+                    )
+                settings["context"] = size
             providers[name] = settings
         result["providers"] = providers
     if "tools" in config:

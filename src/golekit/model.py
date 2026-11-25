@@ -79,7 +79,9 @@ class Model:
     """Configure an OpenAI-compatible provider or a model alias.
 
     ``constrained`` controls JSON Schema constrained decoding: ``None`` follows the
-    provider default, ``True`` or ``False`` forces it on or off.
+    provider default, ``True`` or ``False`` forces it on or off. ``context`` is the context
+    length in tokens that the server really applies to this model; GoleKit only uses it to
+    warn before a prompt is truncated and never changes the server's setting.
     """
 
     def __init__(
@@ -94,6 +96,7 @@ class Model:
         retries: int = 2,
         tool_mode: ToolMode = "auto",
         constrained: bool | None = None,
+        context: int | None = None,
     ) -> None:
         _check_mode(tool_mode)
         client = create_client(
@@ -106,6 +109,7 @@ class Model:
             timeout=timeout,
             retries=retries,
             constrained=constrained,
+            context=context,
         )
         self._binding = _Binding(client, tool_mode)
 

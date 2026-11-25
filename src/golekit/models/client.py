@@ -39,6 +39,20 @@ def _retry_delay(attempt: int, retry_after: str | None) -> float:
     return 0.5 * 2**attempt
 
 
+def _num_ctx(parameters: Any) -> int | None:
+    """Read num_ctx from an Ollama Modelfile parameter listing.
+
+    Only an explicit setting is trusted: the model's maximum context in its metadata is not
+    what the server applies to a request.
+    """
+    if isinstance(parameters, str):
+        for line in parameters.splitlines():
+            name, _, value = line.strip().partition(" ")
+            if name == "num_ctx" and value.strip().isdigit():
+                return int(value) or None
+    return None
+
+
 class CompatibleClient:
     """OpenAI-compatible chat transport configured for one model."""
 
@@ -54,9 +68,11 @@ class CompatibleClient:
         retries: int,
         transport: httpx.AsyncBaseTransport | None,
         constrained: bool | None = None,
+        context: int | None = None,
     ) -> None:
         self.name = name
         self._constrained = constrained
+        self._context = context
         self._model = model
         self._provider = provider
         self._base_url = base_url
@@ -81,7 +97,9 @@ class CompatibleClient:
         )
         if self._provider != "ollama":
             return Capabilities(
-                tools=self._provider in {"openai", "deepseek", "dashscope"}, json_schema=schema
+                tools=self._provider in {"openai", "deepseek", "dashscope"},
+                json_schema=schema,
+                context=self._context,
             )
         url = self._base_url.removesuffix("/v1") + "/api/show"
         try:
@@ -91,12 +109,15 @@ class CompatibleClient:
             data = response.json()
             capabilities = data.get("capabilities")
             if not isinstance(capabilities, list):
-                return Capabilities(json_schema=schema)
+                capabilities = []
             return Capabilities(
-                tools="tools" in capabilities, vision="vision" in capabilities, json_schema=schema
+                tools="tools" in capabilities,
+                vision="vision" in capabilities,
+                json_schema=schema,
+                context=self._context or _num_ctx(data.get("parameters")),
             )
         except (httpx.HTTPError, ValueError, AttributeError):
-            return Capabilities(json_schema=schema)
+            return Capabilities(json_schema=schema, context=self._context)
 
     async def check_connection(self) -> None:
         """Check that the configured service can answer for this specific model."""

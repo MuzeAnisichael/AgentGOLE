@@ -62,8 +62,11 @@ async def _doctor() -> int:
                     client.name,
                     msg.NATIVE if caps.tools else msg.PROMPT_MODE,
                     msg.NATIVE if caps.json_schema else msg.UNSUPPORTED,
+                    caps.context or msg.UNKNOWN,
                 )
             )
+            if caps.context is None and label.startswith("ollama/"):
+                print(msg.CONTEXT_HINT)
         except GoleError as exc:
             key = re.search(r"\b[A-Z][A-Z0-9_]+_API_KEY\b", str(exc))
             reason = (
