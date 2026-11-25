@@ -23,6 +23,7 @@ from typing import Any
 import httpx
 
 import golekit as gole
+from golekit.config import load_config
 from golekit.errors import GoleError
 from golekit.protocols.types import Capabilities, Step, Trace
 
@@ -164,7 +165,9 @@ def digest(spec: str) -> str:
     if provider != "ollama":
         return "—"
     try:
-        models = httpx.get("http://localhost:11434/api/tags", timeout=5).json()["models"]
+        settings = load_config().get("providers", {}).get("ollama", {})
+        host = settings.get("base_url", "http://localhost:11434").rstrip("/").removesuffix("/v1")
+        models = httpx.get(f"{host}/api/tags", timeout=5).json()["models"]
         return next(m["digest"][:12] for m in models if m["name"] == name)
     except (httpx.HTTPError, KeyError, ValueError, StopIteration, TypeError):
         return "未知"
