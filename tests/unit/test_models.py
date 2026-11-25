@@ -3,9 +3,9 @@ import json
 import httpx
 import pytest
 
-from agentgole.errors import ConfigError, ModelError, UnsupportedToolsError
-from agentgole.models import create_client
-from agentgole.protocols.types import Message, ToolCall, ToolSpec
+from golekit.errors import ConfigError, ModelError, UnsupportedToolsError
+from golekit.models import create_client
+from golekit.protocols.types import Message, ToolCall, ToolSpec
 
 
 def answer(content="ok"):

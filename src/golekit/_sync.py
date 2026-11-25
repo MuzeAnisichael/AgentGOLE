@@ -29,7 +29,7 @@ def _background_loop() -> asyncio.AbstractEventLoop:
         if depth == len(_workers):
             ready: Future[asyncio.AbstractEventLoop] = Future()
             threading.Thread(
-                target=_start_loop, args=(ready, depth), name=f"agentgole-sync-{depth}", daemon=True
+                target=_start_loop, args=(ready, depth), name=f"golekit-sync-{depth}", daemon=True
             ).start()
             _workers.append(ready.result())
         return _workers[depth]

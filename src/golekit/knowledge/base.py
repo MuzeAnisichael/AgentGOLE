@@ -22,7 +22,7 @@ from .store import IndexedDocument, State, Store, index_name, normalize
 if TYPE_CHECKING:
     from ..model import Model
 
-_logger = logging.getLogger("agentgole.knowledge")
+_logger = logging.getLogger("golekit.knowledge")
 
 
 def _file_digest(source: str) -> str:

@@ -6,7 +6,7 @@ from typing import Any
 from ..protocols import EventSink
 from ..protocols.types import Chunk, Citation, Event, Trace
 
-_logger = logging.getLogger("agentgole.kernel.events")
+_logger = logging.getLogger("golekit.kernel.events")
 
 
 class RunEvents:

@@ -13,6 +13,7 @@
 
 ### Changed
 
+- **BREAKING** Renamed the distribution and import package from `agentgole` to `golekit`. Use `import golekit as gole`. The `gole` command, `gole.yaml` and `GOLE_*` variables are unchanged.
 - Knowledge indexing and long-term facts use local SQLite files. Built-in stores are intended for single-machine use.
 - A run validates structured answers before emitting their tokens. Tool-assisted runs can buffer intermediate text.
 

@@ -5,11 +5,11 @@ from itertools import pairwise
 
 import pytest
 
-from agentgole.errors import ConfigError, ModelError
-from agentgole.knowledge import Knowledge
-from agentgole.knowledge.chunking import split_document
-from agentgole.protocols.types import Document
-from agentgole.testing import FakeEmbedding
+from golekit.errors import ConfigError, ModelError
+from golekit.knowledge import Knowledge
+from golekit.knowledge.chunking import split_document
+from golekit.protocols.types import Document
+from golekit.testing import FakeEmbedding
 
 
 async def test_incremental_build_across_instances(tmp_path):

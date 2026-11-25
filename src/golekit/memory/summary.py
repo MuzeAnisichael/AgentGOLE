@@ -12,7 +12,7 @@ from ..protocols import EmbeddingClient, ModelClient
 from ..protocols.types import Message
 from .window import copy_turn
 
-_log = logging.getLogger("agentgole.memory.summary")
+_log = logging.getLogger("golekit.memory.summary")
 
 
 @dataclass

@@ -34,7 +34,7 @@ AgentGOLE（暂定名）是一个 Python Agent 内核库：配好一个模型，
 - 从 `pip install` 到第一个 Agent 回答：3 行代码，5 分钟以内。
 - 本地模型和云端 API 之间切换：只改 1 个字符串。
 - 切换记忆或知识库后端（如内置 → mem0 / LlamaIndex）：只改 1 个参数。
-- 核心包只依赖 httpx、Pydantic、PyYAML 三个轻量库：`pip install agentgole` 不会自动装上 LangChain、LlamaIndex 等，需要时再用 extras 按需安装（见 §3）。
+- 核心包只依赖 httpx、Pydantic、PyYAML 三个轻量库：`pip install golekit` 不会自动装上 LangChain、LlamaIndex 等，需要时再用 extras 按需安装（见 §3）。
 - 全离线可用：只靠 Ollama + 本地嵌入模型，就能跑通 L0–L3 的全部示例。
 
 ### 1.5 非目标
@@ -56,7 +56,7 @@ AgentGOLE 的所有 API 形态都由五条原则决定：渐进式复杂度、�
 一个例子看懂前四条：
 
 ```python
-import agentgole as gole
+import golekit as gole
 
 # 原则 1 + 3：用字符串起步
 agent = gole.Agent(model="ollama/qwen3:8b", memory="summary", knowledge="./docs")
@@ -173,16 +173,16 @@ agent.native   # LangGraph 的编译图，可继续使用它的生态工具
 
 ## 3. 安装与模型配置
 
-核心包只依赖 httpx、Pydantic、PyYAML 三个轻量库；其他能力都用 extras 按需安装，缺少某个后端时，报错信息会直接给出安装命令。PyPI 包名为 `agentgole`，惯用导入写法是 `import agentgole as gole`，命令行工具叫 `gole`。
+核心包只依赖 httpx、Pydantic、PyYAML 三个轻量库；其他能力都用 extras 按需安装，缺少某个后端时，报错信息会直接给出安装命令。PyPI 包名为 `golekit`，惯用导入写法是 `import golekit as gole`，命令行工具叫 `gole`。
 
 ```bash
-pip install agentgole                 # 核心：Agent、工具、内置记忆与轻量知识库
-pip install "agentgole[rag]"          # 文档解析（PDF / Word）+ 本地向量库
-pip install "agentgole[mcp]"          # MCP 工具
-pip install "agentgole[mem0]"         # mem0 长期记忆后端
-pip install "agentgole[llamaindex]"   # LlamaIndex 知识库后端
-pip install "agentgole[langgraph]"    # LangGraph：工作流后端，或作为运行引擎（模式 C）
-pip install "agentgole[all]"
+pip install golekit                 # 核心：Agent、工具、内置记忆与轻量知识库
+pip install "golekit[rag]"          # 文档解析（PDF / Word）+ 本地向量库
+pip install "golekit[mcp]"          # MCP 工具
+pip install "golekit[mem0]"         # mem0 长期记忆后端
+pip install "golekit[llamaindex]"   # LlamaIndex 知识库后端
+pip install "golekit[langgraph]"    # LangGraph：工作流后端，或作为运行引擎（模式 C）
+pip install "golekit[all]"
 ```
 
 ### 3.1 模型字符串
@@ -247,7 +247,7 @@ $ gole doctor
 三行代码得到第一个 Agent：
 
 ```python
-import agentgole as gole
+import golekit as gole
 
 agent = gole.Agent(model="ollama/qwen3:8b")
 print(agent.run("用一句话介绍你自己"))
@@ -484,7 +484,7 @@ agent = gole.Agent(tools=[
 | 反思 | `reflect` | 生成 → 自我评审 → 修订 | 写作、代码等质量敏感任务 | 较多 |
 
 ```python
-from agentgole import paradigms
+from golekit import paradigms
 
 agent = gole.Agent(
     paradigm=paradigms.PlanExecute(planner="smart", executor="fast", max_replans=2),
@@ -577,7 +577,7 @@ flow.run("端侧大模型的现状")
 分支、并行和循环用三个原语表达：
 
 ```python
-from agentgole.flow import branch, parallel, loop
+from golekit.flow import branch, parallel, loop
 
 flow = (
     classify                                                        # 输出带 label 字段的结构化结果
@@ -709,13 +709,13 @@ gole.register("memory", "redis", RedisMemory)
 agent = gole.Agent(memory="redis")       # 注册后就能用字符串引用
 ```
 
-第三方包通过 Python entry points（`agentgole.plugins`）自动注册，例如 `pip install agentgole-redis` 后直接写 `memory="redis"`。
+第三方包通过 Python entry points（`golekit.plugins`）自动注册，例如 `pip install golekit-redis` 后直接写 `memory="redis"`。
 
 自定义范式通过返回 `Action` 告诉运行时下一步做什么（`CallModel`、`CallTool`、`Delegate`、`AskHuman`、`Finish`）。范式自己不直接调用模型：每一次模型调用都以 `CallModel` 交给运行时，这样事件、用量统计和步数上限才完整。`CallModel` 可以用 `model=` 指定另一个模型，用 `visible=False` 表示这次的文本是中间产物、不作为 token 发给用户，用 `response_schema=` 要求回复满足某个 JSON Schema；回复在下一次 `step` 的 `state.last_response` 里。
 
 ```python
 import json
-from agentgole import actions
+from golekit import actions
 
 SUBQUESTIONS = {"type": "array", "items": {"type": "string"}}
 
@@ -845,14 +845,14 @@ gole serve my_agent.py:agent --port 8000
 
 | 模块 | 内置实现（零额外依赖） | 可选后端 | 安装 |
 | --- | --- | --- | --- |
-| Model | OpenAI 兼容 HTTP 客户端，Ollama / Anthropic 适配 | LiteLLM（覆盖更多厂商） | `agentgole[litellm]` |
-| Tool | `@tool`、内置工具集 | MCP、LangChain Tools | `agentgole[mcp]`、`agentgole[langchain]` |
-| Memory | Window、Summary、SQLite 长期记忆 | mem0、Letta | `agentgole[mem0]`、`agentgole[letta]` |
-| Knowledge | 轻量 RAG（本地向量 + BM25） | LlamaIndex、LangChain；存储可选 Chroma、Qdrant、Milvus | `agentgole[llamaindex]`、`agentgole[chroma]` 等 |
-| Workflow | 内置 DAG 运行时 | LangGraph | `agentgole[langgraph]` |
+| Model | OpenAI 兼容 HTTP 客户端，Ollama / Anthropic 适配 | LiteLLM（覆盖更多厂商） | `golekit[litellm]` |
+| Tool | `@tool`、内置工具集 | MCP、LangChain Tools | `golekit[mcp]`、`golekit[langchain]` |
+| Memory | Window、Summary、SQLite 长期记忆 | mem0、Letta | `golekit[mem0]`、`golekit[letta]` |
+| Knowledge | 轻量 RAG（本地向量 + BM25） | LlamaIndex、LangChain；存储可选 Chroma、Qdrant、Milvus | `golekit[llamaindex]`、`golekit[chroma]` 等 |
+| Workflow | 内置 DAG 运行时 | LangGraph | `golekit[langgraph]` |
 | Team | router / supervisor / handoff / debate | AutoGen、CrewAI（待调研） | — |
-| Trace | 终端、JSON、HTML | OpenTelemetry、Langfuse | `agentgole[otel]` |
-| Engine（运行引擎，模式 C） | native（AgentGOLE 原生内核） | LangGraph 首个接入；LlamaIndex、smolagents、OpenAI Agents SDK 等随路线图逐步评估接入 | `agentgole[langgraph]` 等 |
+| Trace | 终端、JSON、HTML | OpenTelemetry、Langfuse | `golekit[otel]` |
+| Engine（运行引擎，模式 C） | native（AgentGOLE 原生内核） | LangGraph 首个接入；LlamaIndex、smolagents、OpenAI Agents SDK 等随路线图逐步评估接入 | `golekit[langgraph]` 等 |
 
 ### 10.2 版本路线图
 
@@ -880,7 +880,7 @@ v1.0      稳定版       公共 API 冻结 · 语义化版本 · 完整 API 参
 ### 11.1 全离线的本地文档问答（L2）
 
 ```python
-import agentgole as gole
+import golekit as gole
 
 kb = gole.Knowledge("./company_docs", embedding="ollama/bge-m3")
 agent = gole.Agent(
@@ -927,7 +927,7 @@ print(report.run("2026 年开源 Agent 框架格局", checkpoint="sqlite:///.gol
 ```python
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
-import agentgole as gole
+import golekit as gole
 
 app = FastAPI()
 agent = gole.Agent.load("agents/support.yaml")
@@ -963,6 +963,6 @@ agent = gole.Agent(
 | 5 | 内置实现做多厚 | 教学级最简版 / 单机可用 / 可生产 | 已定：单机可用，生产级交给后端（§6） |
 | 6 | 本地模型工具调用降级 | 作为核心卖点 / 只做基础兼容 | 已定：分阶段投入（§6.1） |
 | 7 | 声明式定义（YAML） | 提供 / 不提供 | 已定：提供，代码优先 |
-| 8 | 项目名称 | 芥子 / 七巧 / 鹊桥 / AgentGOLE 等 | 已定（暂定）：AgentGOLE，取自 LEGO 的字母重排；PyPI 包名 agentgole，命令行 gole |
+| 8 | 项目名称 | 芥子 / 七巧 / 鹊桥 / AgentGOLE 等 | 已定（暂定）：AgentGOLE，取自 LEGO 的字母重排；PyPI 包名 golekit（2026-11-25 由 agentgole 改名，见 DECISIONS D-014），命令行 gole |
 | 9 | 语言 | 仅 Python / 后续加 TypeScript | 已定：首发仅 Python |
 | 10 | 开源协议 | Apache-2.0 / MIT | 已定：Apache-2.0 |

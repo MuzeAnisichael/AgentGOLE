@@ -4,7 +4,7 @@ import os
 
 import httpx
 
-from agentgole import cli
+from golekit import cli
 
 
 def test_init_preserves_existing_files_until_forced(tmp_path, monkeypatch):
@@ -47,7 +47,7 @@ def test_doctor_reports_capabilities_and_missing_key(tmp_path, monkeypatch, caps
 def test_chat_loads_target_streams_and_resets(tmp_path, monkeypatch, capsys):
     target = tmp_path / "assistant.py"
     target.write_text(
-        "from agentgole import Agent\nfrom agentgole.testing import FakeModel\n"
+        "from golekit import Agent\nfrom golekit.testing import FakeModel\n"
         "class ChatModel(FakeModel):\n"
         "    async def generate(self, messages, **kw):\n"
         "        assert len(messages) == 1\n"
@@ -63,16 +63,16 @@ def test_chat_loads_target_streams_and_resets(tmp_path, monkeypatch, capsys):
 
 def test_chat_model_available_while_importing_target(tmp_path, monkeypatch):
     target = tmp_path / "default_agent.py"
-    target.write_text("from agentgole import Agent\nagent = Agent()\n")
+    target.write_text("from golekit import Agent\nagent = Agent()\n")
     monkeypatch.setattr("builtins.input", lambda _: "/exit")
     assert cli.main(["chat", "--model", "ollama/demo", f"{target}:agent"]) == 0
     assert "GOLE_MODEL" not in os.environ
 
 
 def test_chat_recovers_after_failed_turn(monkeypatch, capsys):
-    from agentgole import Agent
-    from agentgole.errors import ModelError
-    from agentgole.testing import FakeModel
+    from golekit import Agent
+    from golekit.errors import ModelError
+    from golekit.testing import FakeModel
 
     class Flaky(FakeModel):
         async def generate(self, messages, **kwargs):
@@ -89,10 +89,10 @@ def test_chat_recovers_after_failed_turn(monkeypatch, capsys):
 
 
 def test_kb_build_prints_incremental_counts(tmp_path, monkeypatch, capsys):
-    from agentgole.testing import FakeEmbedding
+    from golekit.testing import FakeEmbedding
 
     embedding = FakeEmbedding()
-    monkeypatch.setattr("agentgole.models.embedding.resolve_embedding", lambda *a, **kw: embedding)
+    monkeypatch.setattr("golekit.models.embedding.resolve_embedding", lambda *a, **kw: embedding)
     source = tmp_path / "notes.md"
     source.write_text("Team policy", encoding="utf-8")
     args = ["kb", "build", str(source), "--store", str(tmp_path / "store"), "--name", "test"]
@@ -104,15 +104,15 @@ def test_kb_build_prints_incremental_counts(tmp_path, monkeypatch, capsys):
 
 
 def test_chat_model_override_also_switches_fact_extraction(tmp_path, monkeypatch):
-    from agentgole import Agent
-    from agentgole.memory import LongTerm
-    from agentgole.testing import FakeModel
+    from golekit import Agent
+    from golekit.memory import LongTerm
+    from golekit.testing import FakeModel
 
     original, local = FakeModel([]), FakeModel(["ok", '["local fact"]'])
     memory = LongTerm(tmp_path / "facts.db")
     agent = Agent(original, memory=memory)
     monkeypatch.setattr(cli, "_load_agent", lambda *_: agent)
-    monkeypatch.setattr("agentgole.model.create_client", lambda *args, **kwargs: local)
+    monkeypatch.setattr("golekit.model.create_client", lambda *args, **kwargs: local)
     replies = iter(["remember", "/exit"])
     monkeypatch.setattr("builtins.input", lambda _: next(replies))
     assert cli.main(["chat", "agent.py:agent", "--model", "ollama/local"]) == 0
@@ -128,7 +128,7 @@ def test_doctor_probes_embed_alias_with_embeddings(tmp_path, monkeypatch, capsys
 
     factory = cli.create_client
     monkeypatch.setattr(
-        "agentgole.models.embedding.create_client",
+        "golekit.models.embedding.create_client",
         lambda *a, **kw: factory(*a, **kw, transport=httpx.MockTransport(respond)),
     )
     assert cli.main(["doctor"]) == 0

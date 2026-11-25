@@ -2,8 +2,8 @@
 
 import pytest
 
-from agentgole.protocols.types import Message
-from agentgole.testing import FakeModel, fake_tool_call
+from golekit.protocols.types import Message
+from golekit.testing import FakeModel, fake_tool_call
 
 
 async def test_scripted_calls_keep_a_snapshot_and_fail_when_exhausted():
@@ -28,8 +28,8 @@ async def test_stream_emits_deltas_then_a_complete_reply():
 
 
 async def test_embedding_batches_are_reproducible_and_tokens_handle_mixed_text():
-    from agentgole.kernel.context import estimate_tokens
-    from agentgole.testing import FakeEmbedding
+    from golekit.kernel.context import estimate_tokens
+    from golekit.testing import FakeEmbedding
 
     model = FakeEmbedding(7)
     batch = await model.embed(["上海", "notes"])

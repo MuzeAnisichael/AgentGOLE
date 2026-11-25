@@ -1,6 +1,6 @@
 from os import getenv
 
-import agentgole as gole
+import golekit as gole
 
 
 @gole.tool

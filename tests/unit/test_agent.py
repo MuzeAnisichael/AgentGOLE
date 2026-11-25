@@ -9,9 +9,9 @@ import sys
 import httpx
 import pytest
 
-import agentgole as gole
-from agentgole import model as model_module
-from agentgole.testing import FakeModel
+import golekit as gole
+from golekit import model as model_module
+from golekit.testing import FakeModel
 
 
 async def test_waiting_run_takes_over_cancelled_capability_probe(monkeypatch):
@@ -131,7 +131,7 @@ def audit(event, args):
     if event == 'open' and str(args[0]).endswith('gole.yaml'):
         raise AssertionError('config read during import')
 sys.addaudithook(audit)
-import agentgole
+import golekit
 assert not ({"pypdf", "docx", "numpy"} & sys.modules.keys())
 """
     result = subprocess.run(

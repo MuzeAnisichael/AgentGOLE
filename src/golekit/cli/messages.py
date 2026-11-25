@@ -36,7 +36,7 @@ providers:
     api_key: ${DEEPSEEK_API_KEY}
 """
 EXAMPLE = """\
-import agentgole as gole
+import golekit as gole
 
 agent = gole.Agent()
 if __name__ == "__main__":

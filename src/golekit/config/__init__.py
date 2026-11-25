@@ -11,7 +11,7 @@ import yaml
 from ..errors import ConfigError
 
 _VARIABLE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
-_logger = logging.getLogger("agentgole.config")
+_logger = logging.getLogger("golekit.config")
 
 
 def _expand(value: str) -> str:
