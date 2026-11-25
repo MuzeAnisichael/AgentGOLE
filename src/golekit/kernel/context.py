@@ -7,7 +7,7 @@ from ..errors import ConfigError
 from ..protocols import Retriever, StepContext, Tool
 from ..protocols.types import Message, RunState, ToolResult
 from ..tools import tool
-from .events import RunEvents
+from .events import RunEvents, display_source
 
 
 def initial_state(input: str, instructions: str | None, memory: list[Message]) -> RunState:
@@ -15,7 +15,8 @@ def initial_state(input: str, instructions: str | None, memory: list[Message]) -
     messages = [Message(role="system", content=instructions)] if instructions else []
     messages.extend(memory)
     messages.append(Message(role="user", content=input))
-    return RunState(input=input, messages=messages)
+    # Paradigms that extend the instructions need to tell them apart from memory messages.
+    return RunState(input=input, messages=messages, scratch={"instructions": bool(instructions)})
 
 
 def append_results(state: RunState, results: list[ToolResult], as_observation: bool) -> None:
@@ -45,12 +46,16 @@ def estimate_tokens(text: str) -> int:
     return cjk + (len(text) - cjk + 3) // 4
 
 
+_NO_MATCH = "未找到相关内容。"
+
+
 async def _search(retriever: Retriever, query: str, events: RunEvents, start: int = 1) -> str:
     chunks = await retriever.search(query, k=5)
     await events.retrieved(query, chunks)
     lines: list[str] = []
     for index, chunk in enumerate(chunks, start):
-        location = chunk.source if chunk.page is None else f"{chunk.source} p.{chunk.page}"
+        source = display_source(chunk.source)
+        location = source if chunk.page is None else f"{source} p.{chunk.page}"
         lines.append(f"[{index}] ({location}) {chunk.text}")
     return "\n".join(lines)
 
@@ -58,7 +63,7 @@ async def _search(retriever: Retriever, query: str, events: RunEvents, start: in
 def _search_tool(retriever: Retriever, events: RunEvents) -> Tool:
     @tool(name=f"search_{retriever.name}", description=retriever.description)
     async def search(query: str) -> str:
-        return await _search(retriever, query, events)
+        return await _search(retriever, query, events) or _NO_MATCH
 
     return search
 
@@ -93,5 +98,11 @@ async def prepare_knowledge(
         if section:
             sections.append(section)
             start += len(events.trace.events[-1].chunks)
+    if not sections:
+        return
     references = "参考资料：\n" + "\n".join(sections)
-    state.messages.insert(0, Message(role="system", content=references))
+    # Keep the instructions and memory preamble first; some chat templates require that.
+    index = next(
+        (i for i, m in enumerate(state.messages) if m.role != "system"), len(state.messages)
+    )
+    state.messages.insert(index, Message(role="system", content=references))

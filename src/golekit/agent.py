@@ -17,8 +17,17 @@ from .memory import Layered, LongTerm, Summary, Window
 from .model import Model, _Binding, _check_mode
 from .models import create_client
 from .models.embedding import resolve_embedding
-from .paradigms import Auto, React
-from .protocols import EventCallback, EventSink, Memory, ModelClient, Paradigm, StepContext, Tool
+from .paradigms import Auto, Direct, PlanExecute, React, Reflect
+from .protocols import (
+    Approver,
+    EventCallback,
+    EventSink,
+    Memory,
+    ModelClient,
+    Paradigm,
+    StepContext,
+    Tool,
+)
 from .protocols.types import Chunk, Event, Result, ToolMode
 from .tools import resolve_tools
 from .trace import LiveTrace
@@ -37,14 +46,21 @@ class _KnowledgeRetriever:
 
 
 class Agent:
-    """Run a model with tools and optional session memory."""
+    """Run a model with tools, memory, knowledge and a reasoning paradigm.
+
+    ``paradigm`` is ``"auto"``, ``"direct"``, ``"react"``, ``"plan"``, ``"reflect"`` or a
+    Paradigm object. ``approval`` decides calls to tools marked ``confirm=True``.
+
+    Example:
+        gole.Agent("ollama/qwen3:8b", tools=["calculator"], paradigm="plan").run("...")
+    """
 
     def __init__(
         self,
         model: str | Model | ModelClient | None = None,
         *,
         instructions: str | None = None,
-        tools: Iterable[str | Tool] = (),
+        tools: Iterable[str | Tool | Iterable[Tool]] = (),
         memory: str | Memory | None = "session",
         knowledge: Knowledge | str | Path | list[Knowledge | str | Path] | None = None,
         knowledge_mode: str = "auto",
@@ -53,9 +69,13 @@ class Agent:
         max_steps: int = 20,
         timeout: float | None = None,
         tool_mode: ToolMode | None = None,
+        approval: Approver | None = None,
         verbose: bool = False,
     ) -> None:
         _check_mode(tool_mode)
+        if approval is not None and not isinstance(approval, Approver):
+            raise ConfigError("Pass approval=None, approval.Console() or approval.Callback(fn).")
+        self._approval = approval
         if isinstance(model, Model):
             self._binding = model._binding
         elif model is None or isinstance(model, str):
@@ -93,22 +113,67 @@ class Agent:
             raise ConfigError("Set a distinct name for each Knowledge instance.")
         self._paradigm: Paradigm
         if isinstance(paradigm, str):
-            if paradigm not in ("auto", "react"):
-                raise ConfigError("Choose paradigm='auto', 'react' or a Paradigm object.")
-            self._paradigm = Auto() if paradigm == "auto" else React()
+            builtin = {
+                "auto": Auto,
+                "direct": Direct,
+                "plan": PlanExecute,
+                "react": React,
+                "reflect": Reflect,
+            }
+            if paradigm not in builtin:
+                raise ConfigError(
+                    "Choose paradigm='direct', 'auto', 'react', 'plan', 'reflect' "
+                    "or a Paradigm object."
+                )
+            self._paradigm = builtin[paradigm]()
         else:
             self._paradigm = paradigm
+        self._bind_paradigm()
         self.name = name
         self._instructions = instructions
         try:
             self._tools = resolve_tools(tools)
         except ValueError as exc:
             raise ConfigError(str(exc)) from exc
+        if isinstance(self._paradigm, Direct):
+            memory_tools = getattr(self._memory, "tools", None)
+            if (
+                self._tools
+                or (callable(memory_tools) and memory_tools(session="default"))
+                or knowledge_mode == "tool"
+            ):
+                raise ConfigError(
+                    "paradigm='direct' answers in one call without tools. Remove tools, "
+                    "write='tool' memory and knowledge_mode='tool', or choose another paradigm."
+                )
+            if knowledge_mode == "auto":
+                self._knowledge_mode = "context"
         self._max_steps = max_steps
         self._timeout = timeout
         self._mode: ToolMode | None = tool_mode
         self._verbose = verbose
         self._listeners: dict[str, list[EventCallback]] = {}
+
+    def _bind_paradigm(self) -> None:
+        bind = getattr(self._paradigm, "bind", None)
+        if callable(bind):
+            bind(self._binding.client)
+        # A paradigm can name the model that drives the run, such as a plan's executor.
+        primary = getattr(self._paradigm, "primary_model", None)
+        if primary is None:
+            self._run_binding = self._binding
+        elif isinstance(primary, Model):
+            self._run_binding = primary._binding
+        elif isinstance(primary, ModelClient):
+            self._run_binding = _Binding(primary, "auto")
+        else:
+            raise ConfigError("Pass a model name, Model or asynchronous ModelClient.")
+
+    def _use_model(self, binding: _Binding) -> None:
+        """Replace the agent's model and rebind the components that follow it."""
+        self._binding = binding
+        self._bind_memory()
+        self._bind_paradigm()
 
     def _bind_memory(self) -> None:
         bind = getattr(self._memory, "bind", None)
@@ -217,13 +282,16 @@ class Agent:
                 if item.spec.name in tools:
                     raise ConfigError(f"Duplicate memory tool name: {item.spec.name}")
                 tools[item.spec.name] = item
+        binding = self._run_binding
         ctx = StepContext(
-            model=self._binding.client,
+            model=binding.client,
             tools=tools,
             tool_mode="native",
             run_id=run_id,
             report_error=report_error,
-            downgrade=self._binding.downgrade,
+            downgrade=binding.downgrade,
+            approver=self._approval,
+            capabilities=binding.capabilities,
         )
         return await execute(
             input,
@@ -239,5 +307,5 @@ class Agent:
             retrievers=self._retrievers,
             knowledge_mode=self._knowledge_mode,
             emit=emit,
-            resolve_mode=lambda: self._binding.resolve_mode(self._mode),
+            resolve_mode=lambda: binding.resolve_mode(self._mode),
         )

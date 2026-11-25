@@ -5,7 +5,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from golekit.errors import MissingDependencyError
+from golekit.errors import ConfigError, MissingDependencyError
 from golekit.knowledge.loaders import discover_sources, load_source
 from golekit.protocols.types import Document
 
@@ -32,6 +32,34 @@ async def test_discover_files_directories_globs_and_urls(tmp_path, caplog):
 
     assert sources == [str(first), str(second), str(extra), url]
     assert str(unsupported) in caplog.text
+
+
+async def test_missing_explicit_path_fails_and_empty_glob_warns(tmp_path, caplog):
+    missing = tmp_path / "typo.md"
+    with pytest.raises(ConfigError, match="typo.md"):
+        await discover_sources([missing])
+    with pytest.raises(ConfigError, match="absent"):
+        await discover_sources([tmp_path / "absent"])
+    with caplog.at_level(logging.WARNING):
+        assert await discover_sources([str(tmp_path / "*.md")]) == []
+    assert "matched no files" in caplog.text
+
+
+async def test_hidden_entries_are_skipped_unless_named(tmp_path, caplog):
+    visible = tmp_path / "a.md"
+    hidden_file = tmp_path / ".draft.md"
+    repo_note = tmp_path / ".git" / "notes.md"
+    store = tmp_path / ".gole" / "kb" / "index.db"
+    nested = tmp_path / "docs" / ".cache" / "b.md"
+    for path in (visible, hidden_file, repo_note, store, nested):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.touch()
+    with caplog.at_level(logging.WARNING):
+        assert await discover_sources([tmp_path]) == [str(visible)]
+        assert await discover_sources([str(tmp_path / "**" / "*.md")]) == [str(visible)]
+    assert "index.db" not in caplog.text
+    assert await discover_sources([repo_note, hidden_file]) == [str(repo_note), str(hidden_file)]
+    assert await discover_sources([tmp_path / ".git"]) == [str(repo_note)]
 
 
 async def test_text_and_markdown_decode_utf8_with_replacement(tmp_path):
@@ -82,6 +110,14 @@ async def test_docx_preserves_paragraph_order():
     source = str(FIXTURES / "paragraphs.docx")
     docs = await load_source(source)
     assert docs == [Document(text="First paragraph\n\nSecond paragraph", source=source)]
+
+
+async def test_docx_reads_tables_in_document_order():
+    pytest.importorskip("docx")
+    docs = await load_source(str(FIXTURES / "table.docx"))
+    assert [doc.text for doc in docs] == [
+        "报销标准\n\n项目\t上限\n住宿\t500 元\n合计上限 800 元\n\n超出部分需经理审批。"
+    ]
 
 
 @pytest.mark.parametrize(

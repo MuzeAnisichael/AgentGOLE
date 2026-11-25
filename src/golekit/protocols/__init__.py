@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict
 
 from .types import (
     Action,
+    CallModel,
     Capabilities,
     Chunk,
     Event,
@@ -36,9 +37,16 @@ class ModelClient(Protocol):
     async def probe(self) -> Capabilities: ...
 
 
+# CallModel refers to ModelClient, which can only be resolved once it exists.
+CallModel.model_rebuild(_types_namespace={"ModelClient": ModelClient})
+
+
 @runtime_checkable
 class Tool(Protocol):
-    """Callable component with a model-readable schema."""
+    """Callable component with a model-readable schema.
+
+    A tool object may set ``confirm = True`` to require approval before each call.
+    """
 
     spec: ToolSpec
 
@@ -85,8 +93,21 @@ class Memory(Protocol):
     async def save(self, session: str, messages: list[Message]) -> None: ...
 
 
+@runtime_checkable
+class Approver(Protocol):
+    """Decide whether a tool that requires confirmation may run."""
+
+    async def approve(self, tool: str, args: dict[str, Any]) -> bool: ...
+
+
 class StepContext(BaseModel):
-    """Resolved components and event hooks available during an action."""
+    """Resolved components and event hooks available during an action.
+
+    ``downgrade()`` records that the server rejected native tools, and
+    ``downgrade("json_schema")`` that it rejected a JSON Schema response format.
+    ``capabilities`` resolves the features of ``model``; without it the engine probes the client.
+    ``constrained`` is set by the engine: ``model`` accepts a JSON Schema response format.
+    """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
     model: ModelClient
@@ -94,11 +115,19 @@ class StepContext(BaseModel):
     tool_mode: ResolvedMode
     run_id: str
     report_error: Callable[[Exception], Awaitable[None]]
-    downgrade: Callable[[], None]
+    downgrade: Callable[..., None]
+    approver: Approver | None = None
+    capabilities: Callable[[], Awaitable[Capabilities]] | None = None
+    constrained: bool = False
 
 
 class Paradigm(Protocol):
-    """Choose the next action from the current state."""
+    """Choose the next action from the current state.
+
+    A paradigm may define ``bind(model: ModelClient) -> None``; Agent calls it once with
+    its own model. During ``step`` it may set ``state.scratch["thought"]`` to annotate the
+    ``step`` event of the model reply it has just interpreted.
+    """
 
     async def step(self, state: RunState, ctx: StepContext) -> Action: ...
 

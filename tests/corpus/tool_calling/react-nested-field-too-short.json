@@ -1,0 +1,40 @@
+{
+  "source": "tests/unit/test_paradigms.py",
+  "protocol": "react",
+  "tools": [
+    {
+      "name": "search",
+      "description": "",
+      "parameters": {
+        "$defs": {
+          "Search": {
+            "type": "object",
+            "properties": {
+              "query": {
+                "type": "string",
+                "minLength": 3
+              }
+            },
+            "required": [
+              "query"
+            ]
+          }
+        },
+        "type": "object",
+        "properties": {
+          "item": {
+            "$ref": "#/$defs/Search"
+          }
+        },
+        "required": [
+          "item"
+        ],
+        "additionalProperties": false
+      }
+    }
+  ],
+  "reply": "{\"tool\":\"search\",\"arguments\":{\"item\":{\"query\":\"a\"}}}",
+  "expected": {
+    "retry": true
+  }
+}

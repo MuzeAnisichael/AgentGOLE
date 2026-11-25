@@ -1,0 +1,30 @@
+{
+  "source": "tests/unit/test_paradigms.py",
+  "protocol": "react",
+  "tools": [
+    {
+      "name": "find",
+      "description": "Find a record.",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "ids"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      }
+    }
+  ],
+  "reply": "Thought: no tool needed\nHello",
+  "expected": {
+    "final": "Hello"
+  }
+}

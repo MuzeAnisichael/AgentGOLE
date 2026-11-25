@@ -1,12 +1,27 @@
 """Event recording and delivery for one agent run."""
 
 import logging
+from pathlib import Path
 from typing import Any
 
 from ..protocols import EventSink
 from ..protocols.types import Chunk, Citation, Event, Trace
 
 _logger = logging.getLogger("golekit.kernel.events")
+
+
+def display_source(source: str) -> str:
+    """Shorten an indexed absolute path for models and citations; URLs stay intact."""
+    if source.lower().startswith(("https://", "http://")):
+        return source
+    path = Path(source)
+    if not path.is_absolute():
+        return source
+    try:
+        return path.relative_to(Path.cwd().resolve()).as_posix()
+    except ValueError:
+        # Outside the working directory, the full path would only leak the local layout.
+        return path.name
 
 
 class RunEvents:
@@ -26,7 +41,7 @@ class RunEvents:
             if chunk.id not in self._cited:
                 self._cited.add(chunk.id)
                 self.citations.append(
-                    Citation(source=chunk.source, page=chunk.page, text=chunk.text)
+                    Citation(source=display_source(chunk.source), page=chunk.page, text=chunk.text)
                 )
         await self.send("retrieve", query=query, chunks=chunks)
 

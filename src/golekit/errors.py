@@ -17,6 +17,10 @@ class UnsupportedToolsError(ModelError):
     """The server explicitly rejected native tools on a chat request."""
 
 
+class UnsupportedSchemaError(ModelError):
+    """The server rejected a chat request that carried a JSON Schema response format."""
+
+
 class ToolError(GoleError):
     """A tool could not validate or execute a call."""
 

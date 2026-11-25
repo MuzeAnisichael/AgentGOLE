@@ -84,3 +84,38 @@ async def test_marked_prompt_answer_arrives_before_model_end():
     end = next(i for i, e in enumerate(events) if e.type == "model_end")
     assert "".join(e.text for e in events[:end] if e.type == "token") == "first  second"
     assert events[-1].result.text == "first  second"
+
+
+async def test_native_text_streams_before_stream_end_and_tool_call():
+    import asyncio
+
+    from golekit.protocols.types import ModelChunk
+
+    class Slow(FakeModel):
+        finished = 0
+
+        async def stream(self, messages, *, tools=None, **params):
+            response = await self.generate(messages, tools=tools, **params)
+            if response.message.tool_calls:
+                response.message.content = "Let me check. "
+            content = response.message.content or ""
+            for index in range(0, len(content), 4):
+                await asyncio.sleep(0.01)
+                yield ModelChunk(text=content[index : index + 4])
+            self.finished += 1
+            yield ModelChunk(response=response)
+
+    model = Slow([fake_tool_call("weather", {"city": "Paris"}), "Paris is mild."])
+    agent = gole.Agent(model, tools=[weather], tool_mode="native")
+    seen: list[tuple[str, int]] = []
+    agent.on("token")(lambda event: seen.append((event.text, model.finished)))
+    events = [event async for event in agent.astream("Weather?")]
+    result = events[-1].result
+    # The first delta of each reply arrives while that reply is still being generated.
+    assert seen[0] == ("Let ", 0)
+    assert next(text for text, finished in seen if finished == 1) == "Pari"
+    kinds = [event.type for event in events]
+    last_tool = len(kinds) - 1 - kinds[::-1].index("tool_result")
+    assert "token" in kinds[: kinds.index("tool_call")]
+    assert "".join(e.text for e in events[last_tool:] if e.type == "token") == result.text
+    assert result.text == "Paris is mild."

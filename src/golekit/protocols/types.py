@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from time import time
 from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+if TYPE_CHECKING:
+    from . import ModelClient
 
 ToolMode = Literal["auto", "native", "prompt"]
 ResolvedMode = Literal["native", "prompt"]
@@ -69,6 +73,7 @@ class Capabilities(BaseModel):
     tools: bool = False
     json_mode: bool = False
     vision: bool = False
+    json_schema: bool = False
     context: int | None = None
 
 
@@ -128,6 +133,20 @@ class Trace(BaseModel):
         from ..trace import show
 
         show(self)
+
+    def to_json(self, path: str | Path | None = None) -> str:
+        """Return the events as a JSON document, also writing it to ``path`` when given.
+
+        The document holds the complete conversation, tool arguments and tool results, but
+        no credentials: request headers never enter events. Check its content before
+        sending it to someone else.
+
+        Example:
+            result.trace.to_json("traces/run.json")
+        """
+        from ..trace import to_json
+
+        return to_json(self, path)
 
 
 class Document(BaseModel):
@@ -190,11 +209,21 @@ class RunState(BaseModel):
 
 
 class CallModel(BaseModel):
-    """Generate the next reply, optionally using a token emission marker."""
+    """Generate a reply, optionally with another model, hidden from the token stream.
 
+    ``model`` selects the client for this call and defaults to the run's model.
+    ``visible=False`` marks intermediate text that must not be emitted as tokens.
+    ``response_schema`` is a JSON Schema the reply should satisfy; the engine passes it
+    to backends that support constrained decoding.
+    """
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
     messages: list[Message] | None = None
     use_tools: bool = True
     emit_tokens_after: str | None = None
+    model: ModelClient | None = None
+    visible: bool = True
+    response_schema: dict[str, Any] | None = None
 
 
 class CallTool(BaseModel):

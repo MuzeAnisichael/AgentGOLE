@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "golekit"
-version = "0.2.0.dev0"
+version = "0.3.0.dev0"
 description = "An asynchronous agent kernel for local and hosted language models"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -28,7 +28,7 @@ include = ["*.py", "*.pyi", "pyproject.toml"]
 extend-exclude = [".worktrees", ".dev-tools", ".uv-cache"]
 
 [tool.pyright]
-include = ["src", "examples", "tests"]
+include = ["src", "examples", "tests", "benchmarks"]
 strict = ["src/golekit/protocols", "src/golekit/kernel"]
 typeCheckingMode = "basic"
 pythonVersion = "3.11"

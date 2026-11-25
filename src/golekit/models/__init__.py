@@ -35,6 +35,8 @@ def create_client(
     retries: int = 2,
     transport: httpx.AsyncBaseTransport | None = None,
     embedding: bool = False,
+    constrained: bool | None = None,
+    context: int | None = None,
 ) -> CompatibleClient:
     """Resolve the model alias, provider endpoint and credentials without network I/O."""
     if "/" not in spec and base_url is None:
@@ -76,11 +78,31 @@ def create_client(
     )
     if key_name and not key:
         raise ConfigError(f"Set {key_name} to use the {provider} provider.")
+    # The context length the server really applies: argument, environment, then gole.yaml.
+    if context is None and (declared := os.environ.get("GOLE_CONTEXT")):
+        try:
+            context = int(declared)
+        except ValueError:
+            raise ConfigError("Set GOLE_CONTEXT to a positive token count.") from None
+    if context is None:
+        context = options.get("context")
+    if context is not None and context < 1:
+        raise ConfigError("Set the context length to a positive token count.")
     defaults = {}
     if temperature is not None:
         defaults["temperature"] = temperature
     if max_tokens is not None:
         defaults["max_tokens"] = max_tokens
     return CompatibleClient(
-        provider, model, spec, endpoint, key, defaults, timeout, retries, transport
+        provider,
+        model,
+        spec,
+        endpoint,
+        key,
+        defaults,
+        timeout,
+        retries,
+        transport,
+        constrained,
+        context,
     )

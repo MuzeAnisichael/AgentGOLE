@@ -41,7 +41,13 @@ def test_doctor_reports_capabilities_and_missing_key(tmp_path, monkeypatch, caps
     assert cli.main(["doctor"]) == 1
     lines = capsys.readouterr().out.splitlines()
     assert lines[0].startswith("[ok]   ollama/demo") and "不支持 → 将使用提示词模式" in lines[0]
-    assert lines[1].startswith("[fail] openai/demo") and "缺少 OPENAI_API_KEY" in lines[1]
+    assert "约束解码: 支持" in lines[0] and "上下文: 未知" in lines[0]
+    assert "ollama ps" in lines[1]
+    assert lines[2].startswith("[fail] openai/demo") and "缺少 OPENAI_API_KEY" in lines[2]
+    monkeypatch.setenv("GOLE_CONTEXT", "4096")
+    cli.main(["doctor"])
+    lines = capsys.readouterr().out.splitlines()
+    assert "上下文: 4096" in lines[0] and lines[1].startswith("[fail]")
 
 
 def test_chat_loads_target_streams_and_resets(tmp_path, monkeypatch, capsys):
@@ -86,6 +92,30 @@ def test_chat_recovers_after_failed_turn(monkeypatch, capsys):
     assert cli.main(["chat", "agent.py:agent"]) == 0
     output = capsys.readouterr()
     assert "first turn failed" in output.err and "recovered" in output.out
+
+
+def test_chat_separates_text_before_a_tool_call(monkeypatch, capsys):
+    from golekit import Agent, tool
+    from golekit.testing import FakeModel, fake_tool_call
+
+    class Narrating(FakeModel):
+        async def generate(self, messages, **kwargs):
+            response = await super().generate(messages, **kwargs)
+            if response.message.tool_calls:
+                response.message.content = "Checking."
+            return response
+
+    @tool
+    def clock() -> str:
+        """Tell the time."""
+        return "noon"
+
+    model = Narrating([fake_tool_call("clock", {}), "It is noon."])
+    monkeypatch.setattr(cli, "_load_agent", lambda *args: Agent(model, tools=[clock]))
+    inputs = iter(["time?", "/exit"])
+    monkeypatch.setattr("builtins.input", lambda _: next(inputs))
+    assert cli.main(["chat", "agent.py:agent"]) == 0
+    assert capsys.readouterr().out.splitlines() == ["Checking.", "It is noon."]
 
 
 def test_kb_build_prints_incremental_counts(tmp_path, monkeypatch, capsys):

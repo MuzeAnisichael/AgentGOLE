@@ -1,15 +1,77 @@
 """Execute model and tool actions chosen by the paradigm."""
 
 import json
+import logging
 from time import monotonic
 from typing import Any
 
 from pydantic import BaseModel
 
-from ..errors import ModelError, ToolError
-from ..protocols import StepContext
-from ..protocols.types import CallModel, CallTool, Message, ModelResponse, ToolResult, ToolSpec
+from ..errors import ModelError, UnsupportedSchemaError
+from ..protocols import ModelClient, StepContext
+from ..protocols.types import (
+    CallModel,
+    CallTool,
+    Capabilities,
+    Message,
+    ModelResponse,
+    ToolResult,
+    ToolSpec,
+)
+from .chain import Refusal, run_tool
+from .context import estimate_tokens
 from .events import RunEvents
+
+_logger = logging.getLogger("golekit.kernel.evaluator")
+
+
+class ModelCalls:
+    """What one run has learned about the models it talks to."""
+
+    def __init__(self, ctx: StepContext) -> None:
+        self._ctx = ctx
+        self._known: dict[int, Capabilities] = {}
+        self._warned = False
+
+    async def capabilities(self, client: ModelClient) -> Capabilities:
+        """Resolve a client's features once per run."""
+        key = id(client)
+        if key not in self._known:
+            shared = self._ctx.capabilities if client is self._ctx.model else None
+            self._known[key] = await (shared() if shared is not None else client.probe())
+        return self._known[key]
+
+    async def context_used(
+        self, client: ModelClient, messages: list[Message], response: ModelResponse
+    ) -> float | None:
+        """Return the share of the context taken by the prompt, warning once when it is nearly full."""
+        limit = (await self.capabilities(client)).context
+        if not limit:
+            return None
+        prompt = response.usage.prompt_tokens or sum(
+            estimate_tokens(message.content or "") for message in messages
+        )
+        used = prompt / limit
+        if used >= 0.9 and not self._warned:
+            self._warned = True
+            _logger.warning(
+                "The prompt for %s uses %d of %d context tokens (%.0f%%); the server may "
+                "truncate it silently. Raise the server's context length (num_ctx on Ollama) "
+                "and pass the new value with context= or GOLE_CONTEXT.",
+                client.name,
+                prompt,
+                limit,
+                used * 100,
+            )
+        return used
+
+    def reject_schema(self, client: ModelClient) -> None:
+        """Stop sending JSON Schema response formats to a client that refused one."""
+        key = id(client)
+        self._known[key] = self._known[key].model_copy(update={"json_schema": False})
+        if client is self._ctx.model:
+            self._ctx.constrained = False
+            self._ctx.downgrade("json_schema")
 
 
 async def call_model(
@@ -19,46 +81,77 @@ async def call_model(
     streaming: bool,
     events: RunEvents,
     pending_tokens: list[str] | None,
+    calls: ModelCalls,
 ) -> ModelResponse:
-    """Generate a reply and emit visible content deltas when streaming."""
+    """Generate a reply; a streamed call emits its deltas or collects them in pending_tokens."""
+    client = action.model or ctx.model
     messages = conversation if action.messages is None else action.messages
     specs = (
         [tool.spec for tool in ctx.tools.values()]
         if action.use_tools and ctx.tool_mode == "native"
         else []
     )
+    # Constrained decoding and native tools are never combined in one request (D-307).
+    constrain = (
+        action.response_schema is not None
+        and not specs
+        and (await calls.capabilities(client)).json_schema
+    )
     started = monotonic()
-    await events.send("model_start", messages=list(messages), model=ctx.model.name)
-    if streaming:
-        response = await _stream_model(
-            messages, specs or None, ctx, action.emit_tokens_after, events, pending_tokens
-        )
+    await events.send("model_start", messages=list(messages), model=client.name)
+
+    async def request(params: dict[str, Any]) -> ModelResponse:
+        if streaming:
+            return await _stream_model(
+                client,
+                messages,
+                specs or None,
+                action.emit_tokens_after,
+                events,
+                pending_tokens,
+                params,
+            )
+        return await client.generate(messages, tools=specs or None, **params)
+
+    if constrain:
+        schema = {"name": "response", "schema": action.response_schema}
+        try:
+            response = await request(
+                {"response_format": {"type": "json_schema", "json_schema": schema}}
+            )
+        except UnsupportedSchemaError as exc:
+            # Only a successful plain request proves that the response format was the problem.
+            response = await request({})
+            calls.reject_schema(client)
+            await events.recover(exc)
     else:
-        response = await ctx.model.generate(messages, tools=specs or None)
+        response = await request({})
     await events.send(
         "model_end",
         model=response.model,
         usage=response.usage,
         tool_calls=response.message.tool_calls,
         duration=monotonic() - started,
+        context_used=await calls.context_used(client, messages, response),
     )
     return response
 
 
 async def _stream_model(
+    client: ModelClient,
     messages: list[Message],
     specs: list[ToolSpec] | None,
-    ctx: StepContext,
     marker: str | None,
     events: RunEvents,
     pending_tokens: list[str] | None,
+    params: dict[str, Any],
 ) -> ModelResponse:
     response = None
     pending = ""
     trim_answer = bool(marker) and pending_tokens is None
     started_answer = False
     trailing = ""
-    chunks = ctx.model.stream(messages, tools=specs)
+    chunks = client.stream(messages, tools=specs, **params)
     try:
         async for chunk in chunks:
             if chunk.response is not None:
@@ -118,14 +211,12 @@ async def call_tools(action: CallTool, ctx: StepContext, events: RunEvents) -> l
         await events.send("tool_call", tool=call.name, args=call.arguments)
         error = None
         try:
-            if call.invalid_arguments:
-                raise ToolError("invalid arguments JSON")
-            tool = ctx.tools.get(call.name)
-            if tool is None:
-                raise ToolError(f"Unknown tool '{call.name}'. Choose a registered tool.")
-            output = _serialize(await tool.call(**call.arguments))
+            output = _serialize(await run_tool(call, ctx, events))
+        except Refusal as exc:
+            error = str(exc)
+            output = _serialize(f"Error: {error}")
         except Exception as exc:  # noqa: BLE001 - tool failures become observations
-            error = str(exc) if call.invalid_arguments else f"{type(exc).__name__}: {exc}"
+            error = f"{type(exc).__name__}: {exc}"
             output = _serialize(f"Error: {error}")
         results.append(ToolResult(call_id=call.id, name=call.name, output=output, error=error))
         await events.send(

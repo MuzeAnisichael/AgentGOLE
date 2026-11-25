@@ -10,7 +10,7 @@ from typing import Any, TypeVar
 
 import httpx
 
-from ..errors import ModelError, UnsupportedToolsError
+from ..errors import ModelError, UnsupportedSchemaError, UnsupportedToolsError
 from ..protocols.types import Capabilities, Message, ModelChunk, ModelResponse, ToolSpec
 from .wire import completed_response, stream_response, wire_message
 
@@ -39,6 +39,20 @@ def _retry_delay(attempt: int, retry_after: str | None) -> float:
     return 0.5 * 2**attempt
 
 
+def _num_ctx(parameters: Any) -> int | None:
+    """Read num_ctx from an Ollama Modelfile parameter listing.
+
+    Only an explicit setting is trusted: the model's maximum context in its metadata is not
+    what the server applies to a request.
+    """
+    if isinstance(parameters, str):
+        for line in parameters.splitlines():
+            name, _, value = line.strip().partition(" ")
+            if name == "num_ctx" and value.strip().isdigit():
+                return int(value) or None
+    return None
+
+
 class CompatibleClient:
     """OpenAI-compatible chat transport configured for one model."""
 
@@ -53,8 +67,12 @@ class CompatibleClient:
         timeout: float,
         retries: int,
         transport: httpx.AsyncBaseTransport | None,
+        constrained: bool | None = None,
+        context: int | None = None,
     ) -> None:
         self.name = name
+        self._constrained = constrained
+        self._context = context
         self._model = model
         self._provider = provider
         self._base_url = base_url
@@ -69,9 +87,20 @@ class CompatibleClient:
         return httpx.AsyncClient(headers=headers, timeout=self._timeout, transport=self._transport)
 
     async def probe(self) -> Capabilities:
-        """Resolve tool support, asking Ollama for the installed model's metadata."""
+        """Resolve provider features, asking Ollama for the installed model's metadata."""
+        # Local servers and OpenAI accept a JSON Schema response format; an explicit
+        # setting wins over the provider default.
+        schema = (
+            self._provider in {"ollama", "lmstudio", "vllm", "openai"}
+            if self._constrained is None
+            else self._constrained
+        )
         if self._provider != "ollama":
-            return Capabilities(tools=self._provider in {"openai", "deepseek", "dashscope"})
+            return Capabilities(
+                tools=self._provider in {"openai", "deepseek", "dashscope"},
+                json_schema=schema,
+                context=self._context,
+            )
         url = self._base_url.removesuffix("/v1") + "/api/show"
         try:
             async with self._http() as http:
@@ -80,16 +109,23 @@ class CompatibleClient:
             data = response.json()
             capabilities = data.get("capabilities")
             if not isinstance(capabilities, list):
-                return Capabilities()
-            return Capabilities(tools="tools" in capabilities, vision="vision" in capabilities)
+                capabilities = []
+            return Capabilities(
+                tools="tools" in capabilities,
+                vision="vision" in capabilities,
+                json_schema=schema,
+                context=self._context or _num_ctx(data.get("parameters")),
+            )
         except (httpx.HTTPError, ValueError, AttributeError):
-            return Capabilities()
+            return Capabilities(json_schema=schema, context=self._context)
 
     async def check_connection(self) -> None:
         """Check that the configured service can answer for this specific model."""
         await self.generate([Message(role="user", content="Hi")], max_tokens=1)
 
-    def _status_error(self, response: httpx.Response, used_tools: bool) -> ModelError:
+    def _status_error(
+        self, response: httpx.Response, used_tools: bool, used_schema: bool = False
+    ) -> ModelError:
         try:
             error = response.json()["error"]
             detail = error["message"] if isinstance(error, dict) else error
@@ -102,6 +138,10 @@ class CompatibleClient:
         error_type = ModelError
         if used_tools and response.status_code == 400 and _UNSUPPORTED_TOOLS.search(detail):
             error_type = UnsupportedToolsError
+        elif used_schema and response.status_code in (400, 422):
+            # Servers word this rejection in many ways; the caller confirms it by resending
+            # the request without the response format.
+            error_type = UnsupportedSchemaError
         summary = " ".join(detail.split())[:300]
         return error_type(f"{self._provider} HTTP {response.status_code}: {summary}")
 
@@ -135,7 +175,12 @@ class CompatibleClient:
                 yield ModelChunk(response=completed_response(response.json(), self.name))
 
         async for chunk in self._post(
-            "/chat/completions", payload, decode, "chat completion", bool(tools)
+            "/chat/completions",
+            payload,
+            decode,
+            "chat completion",
+            bool(tools),
+            payload.get("response_format") is not None,
         ):
             yield chunk
 
@@ -159,6 +204,7 @@ class CompatibleClient:
         decode: Callable[[httpx.Response], AsyncIterator[_T]],
         operation: str,
         used_tools: bool = False,
+        used_schema: bool = False,
     ) -> AsyncIterator[_T]:
         url = self._base_url + path
         async with self._http() as http:
@@ -178,7 +224,7 @@ class CompatibleClient:
                         if attempt == self._retries or not (
                             response.status_code == 429 or 500 <= response.status_code < 600
                         ):
-                            raise self._status_error(response, used_tools)
+                            raise self._status_error(response, used_tools, used_schema)
                         delay = _retry_delay(attempt, response.headers.get("Retry-After"))
                 except httpx.TransportError as exc:
                     # Replaying a partially delivered stream would duplicate visible tokens.

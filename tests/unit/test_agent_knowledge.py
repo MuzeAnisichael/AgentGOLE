@@ -63,3 +63,56 @@ def test_memory_resolves_default_embeddings_only_if_needed(tmp_path, monkeypatch
     memory = LongTerm(tmp_path / "notes.db", embedding=embedding, write="tool")
     gole.Agent(model, memory=memory).memory.add("blue")
     assert embedding.calls == [["blue"]]
+
+
+@pytest.mark.parametrize("instructions", ["Be brief.", None])
+async def test_context_references_follow_instructions_and_skip_empty(tmp_path, instructions):
+    source = tmp_path / "policy.md"
+    source.write_text("审批流程由经理负责。", encoding="utf-8")
+    kb = gole.Knowledge(source, store=tmp_path, retriever="keyword", name="policy")
+
+    @gole.tool
+    def ping() -> str:
+        """Check the service."""
+        return "pong"
+
+    model = FakeModel(["Final Answer:经理", "Final Answer:none"], tools_supported=False)
+    agent = gole.Agent(
+        model, instructions=instructions, tools=[ping], knowledge=kb, knowledge_mode="context"
+    )
+    await agent.arun("审批", session="hit")
+    protocol, references, question = model.requests[0]["messages"]
+    assert protocol.role == "system" and "Available tools" in (protocol.content or "")
+    assert (protocol.content or "").startswith("Be brief." if instructions else "Available tools")
+    assert (references.content or "").startswith("参考资料：\n[1]") and question.role == "user"
+    await agent.arun("zebra", session="miss")
+    assert not any("参考资料" in (m.content or "") for m in model.requests[1]["messages"])
+
+
+async def test_search_tool_reports_no_match(tmp_path):
+    source = tmp_path / "policy.md"
+    source.write_text("审批流程由经理负责。", encoding="utf-8")
+    kb = gole.Knowledge(source, store=tmp_path, retriever="keyword", name="policy")
+    model = FakeModel([fake_tool_call("search_policy", {"query": "zebra"}), "unknown"])
+    result = await gole.Agent(model, knowledge=kb, knowledge_mode="tool").arun("zebra")
+    assert result.steps[1].results[0].output == "未找到相关内容。"
+
+
+async def test_sources_are_shown_relative_to_the_working_directory(tmp_path, monkeypatch):
+    source = tmp_path / "docs" / "policy.md"
+    source.parent.mkdir()
+    source.write_text("审批流程由经理负责。", encoding="utf-8")
+    kb = gole.Knowledge(source, store=tmp_path / "kb", retriever="keyword", name="policy")
+    model = FakeModel(["经理", "经理"])
+    agent = gole.Agent(model, knowledge=kb, knowledge_mode="context", memory=None)
+    result = await agent.arun("审批")
+    assert result.citations[0].source == "docs/policy.md"
+    sent = "".join(m.content or "" for m in model.requests[0]["messages"])
+    assert "[1] (docs/policy.md) " in sent and str(tmp_path) not in sent
+    assert next(e for e in result.trace.events if e.type == "retrieve").chunks[0].source == str(
+        source.resolve()
+    )
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+    assert (await agent.arun("审批")).citations[0].source == "policy.md"
