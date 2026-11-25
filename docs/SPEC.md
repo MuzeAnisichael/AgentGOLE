@@ -283,6 +283,8 @@ for event in agent.stream("写一首关于秋天的短诗"):
         print(event.text, end="", flush=True)
 ```
 
+`token` 事件的语义：文本一生成就发出。Agent 调用了工具时，工具调用之前的文本是中间文本；最后一个 `tool_result` 事件之后的 token 拼接起来等于 `result.text`。没有工具调用时，全部 token 拼接起来就是 `result.text`。指定了 `output=`（§4.4）时，回答通过校验后才发出 token。
+
 ### 4.3 异步
 
 所有方法都有异步版本：内核本身是异步的，同步方法只是包装。在 Jupyter 这类已有事件循环的环境里，同步方法会自动切到后台线程执行，不需要额外处理。
@@ -295,7 +297,7 @@ async for event in agent.astream("..."):
 
 ### 4.4 结构化输出
 
-传入一个 Pydantic 模型，拿回的就是它的实例；模型输出不合规时自动重试。
+传入一个 Pydantic 模型，拿回的就是它的实例；`list[str]` 这类 Pydantic 能校验的类型也可以。模型输出不合规时，带着错误信息让模型重答，最多 2 次；仍不合规时抛 `OutputValidationError`。`result.text` 是原始的 JSON 文本。
 
 ```python
 from pydantic import BaseModel
@@ -356,7 +358,7 @@ agent.run("上海今天适合跑步吗？")
 ```python
 agent = gole.Agent(
     model="ollama/qwen3:8b",
-    memory="long",          # 会话摘要 + 跨会话长期记忆
+    memory="long",          # 会话摘要 + 跨进程持久的长期记忆
     knowledge="./papers",   # 自动解析、切分、向量化该目录
 )
 agent.run("我上周让你记住的实验参数是什么？")
@@ -415,13 +417,14 @@ smart = gole.Model("deepseek/deepseek-chat", temperature=0.3, max_tokens=4096, t
 local = gole.Model("Qwen2.5-7B-Instruct", base_url="http://localhost:8000/v1", api_key="EMPTY")
 
 fast.generate("你好")     # 不经过 Agent，直接调用模型
-fast.capabilities          # Capabilities(tools=True, json_mode=False, vision=False, context=None)，首次访问时探测并缓存
+fast.capabilities          # Capabilities(tools=True, json_mode=False, json_schema=True, vision=False, context=None)，首次访问时探测并缓存
 
 embed = gole.Embedding("ollama/bge-m3")   # 嵌入模型，供记忆与知识库使用
 ```
 
 - **工具调用降级**：`tool_mode="auto"`（默认）先探测模型能力，支持原生函数调用就用原生，否则用提示词约定格式并解析；也可以强制指定 `"native"` 或 `"prompt"`。`gole.Model` 和 `gole.Agent` 都接受 `tool_mode`，Agent 上的设置优先；没有注册任何工具时，不使用提示词协议，直接对话。
-- **降级分阶段建设**：v0.1 提供通用 ReAct 模板、损坏 JSON 修复和带报错信息的重试；v0.3 起接入推理后端的约束解码（Ollama 结构化输出、vLLM guided decoding、llama.cpp GBNF），并发布小模型工具调用成功率基准。
+- **降级分阶段建设**：v0.1 提供通用 ReAct 模板、损坏 JSON 修复和带报错信息的重试；v0.3 起接入推理后端的约束解码（Ollama 结构化输出、vLLM guided decoding、llama.cpp GBNF），并发布小模型工具调用成功率基准。后端支持按 JSON Schema 约束输出时自动启用，`gole.Model(..., constrained=True / False)` 可以强制开关。
+- **上下文长度**：本地推理服务实际可用的上下文往往比模型标称的小，超出的部分会被静默截断。`gole.Model(..., context=8192)`、环境变量 `GOLE_CONTEXT` 或 gole.yaml 的 `providers.<provider>.context` 可以把实际值告诉 AgentGOLE；提示词用量达到 90% 时会记一条 warning，`model_end` 事件带 `context_used`，`gole doctor` 也会显示这个值。自动压缩在 v0.8 提供。
 - **多模型分工**：记忆摘要、规划、评审等环节可以各自指定模型，例如用小模型做摘要：`gole.Agent(model=smart, memory=gole.memory.Summary(model=fast))`。
 
 ### 6.2 Tool 工具
@@ -448,10 +451,10 @@ def delete_file(path: str) -> str:
 | --- | --- | --- |
 | `calculator` | 安全的算式求值 | 不执行任意代码 |
 | `datetime` | 当前时间与日期计算 |  |
-| `web_search` | 网页搜索 | 搜索提供方可配置 |
+| `web_search` | 网页搜索 | 搜索提供方可配置：`duckduckgo`（默认，无需密钥）、`tavily` |
 | `web_fetch` | 抓取网页正文 |  |
-| `python` | 执行 Python 代码 | 默认子进程沙箱，可选 Docker |
-| `files` | 读写指定目录下的文件 | 必须指定 `root` |
+| `python` | 执行 Python 代码 | 子进程运行，带超时且禁网；默认需要人工确认；Docker 沙箱 v0.8 起 |
+| `files` | 读写指定目录下的文件 | 用 `gole.tools.files(root=...)` 指定目录；默认只读，`write=True` 时可写 |
 | `shell` | 执行命令行 | 默认需要人工确认 |
 
 接入 MCP 服务、其他框架的工具，或把另一个 Agent 当作工具：
@@ -494,14 +497,14 @@ agent = gole.Agent(
 
 ### 6.4 Memory 记忆
 
-记忆分三层：工作记忆（当前上下文）、会话记忆（同一会话的历史）、长期记忆（跨会话的事实与偏好）。四个预设覆盖常见需求：
+记忆分三层：工作记忆（当前上下文）、会话记忆（同一会话的历史）、长期记忆（跨进程持久的事实与偏好，按 `session` 隔离）。四个预设覆盖常见需求：
 
 | 取值 | 含义 | 等价对象 |
 | --- | --- | --- |
 | `None` | 无状态，每次调用独立 | — |
 | `"session"`（默认） | 保留最近 N 轮原文 | `memory.Window(turns=20)` |
 | `"summary"` | 超出窗口的历史滚动压缩成摘要 | `memory.Summary(max_tokens=2000)` |
-| `"long"` | 摘要 + 跨会话长期记忆 | `memory.Layered(short=Summary(), long=LongTerm())` |
+| `"long"` | 摘要 + 跨进程持久的长期记忆 | `memory.Layered(short=Summary(), long=LongTerm())` |
 
 ```python
 mem = gole.memory.Layered(
@@ -516,7 +519,8 @@ agent.memory.export(session="u42")    # 导出为 JSON，便于调试
 agent.memory.clear(session="u42")
 ```
 
-- **写入时机**：长期记忆默认在每轮结束后异步抽取（`write="after_run"`）；设为 `"tool"` 则把 remember / recall 交给模型自主调用。
+- **写入时机**：长期记忆默认在每轮结束后异步抽取（`write="after_run"`）；设为 `"tool"` 则把 remember / recall 交给模型自主调用。抽取在最终回答发出之后、`run` 返回之前完成，不阻塞流式输出；抽取失败只发一个可恢复的 `error` 事件，不影响本轮回答。
+- **隔离**：长期记忆按 `session` 隔离，一个 session 写入的事实不会出现在另一个 session 里。把 `session` 设为用户或对话的标识即可。v0.4 起可以另外传 `user=`（默认等于 `session`）：长期记忆按 `user` 归属，同一个用户的多段对话就能共享长期记忆，会话记忆仍按 `session` 区分。
 - **存储位置**：内置实现默认写入 `./.gole/memory.db`（SQLite），单机可用；多实例部署时应切换到外部后端。
 
 ### 6.5 Knowledge 知识库
@@ -707,21 +711,32 @@ agent = gole.Agent(memory="redis")       # 注册后就能用字符串引用
 
 第三方包通过 Python entry points（`agentgole.plugins`）自动注册，例如 `pip install agentgole-redis` 后直接写 `memory="redis"`。
 
-自定义范式通过返回 `Action` 告诉运行时下一步做什么（`CallModel`、`CallTool`、`Delegate`、`AskHuman`、`Finish`）：
+自定义范式通过返回 `Action` 告诉运行时下一步做什么（`CallModel`、`CallTool`、`Delegate`、`AskHuman`、`Finish`）。范式自己不直接调用模型：每一次模型调用都以 `CallModel` 交给运行时，这样事件、用量统计和步数上限才完整。`CallModel` 可以用 `model=` 指定另一个模型，用 `visible=False` 表示这次的文本是中间产物、不作为 token 发给用户，用 `response_schema=` 要求回复满足某个 JSON Schema；回复在下一次 `step` 的 `state.last_response` 里。
 
 ```python
+import json
 from agentgole import actions
+
+SUBQUESTIONS = {"type": "array", "items": {"type": "string"}}
 
 class SelfAsk(gole.Paradigm):
     """先把问题拆成子问题，逐个回答后汇总"""
     async def step(self, state, ctx):
-        if state.turn == 0:
-            state.scratch["todo"] = await ctx.model.generate(
-                f"把问题拆成子问题：{state.input}", output=list[str])
-        if state.scratch["todo"]:
-            q = state.scratch["todo"].pop(0)
-            return actions.Delegate(q, paradigm="react")    # 子问题交给 ReAct 解决
-        return actions.Finish(await ctx.model.generate(f"汇总以下答案：{state.history}"))
+        phase = state.scratch.setdefault("phase", "split")
+        if phase == "split":                       # 第 1 步：请模型拆解问题
+            state.scratch["phase"] = "solve"
+            ask = {"role": "user", "content": f"把问题拆成子问题：{state.input}"}
+            return actions.CallModel(messages=[ask], visible=False, response_schema=SUBQUESTIONS)
+        if phase == "solve":
+            if "todo" not in state.scratch:        # 上一步的回复就是子问题列表
+                state.scratch["todo"] = json.loads(state.last_response.content)
+            if state.scratch["todo"]:
+                q = state.scratch["todo"].pop(0)
+                return actions.Delegate(q, paradigm="react")    # 子问题交给 ReAct 解决
+            state.scratch["phase"] = "answer"
+            ask = {"role": "user", "content": f"汇总以下答案：{state.history}"}
+            return actions.CallModel(messages=[ask])            # 最终回答，逐 token 发出
+        return actions.Finish(state.last_response.content)
 ```
 
 ### 8.4 手动驱动运行循环
@@ -773,7 +788,8 @@ paradigm: reflect
 ### 9.1 运行轨迹
 
 - `gole.Agent(..., verbose=True)`：在终端实时打印步骤树。
-- `result.trace.show()` / `.to_json()` / `.to_html("trace.html")`：事后查看或导出。
+- `result.trace.show()` / `.to_json("trace.json")` / `.to_html("trace.html")`：事后查看或导出。运行失败时，轨迹在异常的 `trace` 属性上。
+- 环境变量 `GOLE_TRACE_DIR`：设置后，每次运行结束或失败时自动把轨迹写成 `<目录>/<run_id>.json`，方便把出问题的运行发给别人分析。轨迹里有完整的对话内容，发出前先检查。
 - `gole.trace.export("otel")` 或 `"langfuse"`：接入已有的观测平台。
 
 ```text
@@ -787,9 +803,9 @@ run 3f2a  "上海今天适合跑步吗？"                          2.8s   1,204
 
 ### 9.2 安全与人工介入
 
-- **工具审批**：`@gole.tool(confirm=True)` 的工具在执行前触发 `approval_required`；审批方式可选 `gole.approval.Console()`（终端 y/n）、`Callback(fn)` 或 `Webhook(url)`。
+- **工具审批**：`@gole.tool(confirm=True)` 的工具在执行前触发 `approval_required`；审批方式通过 `gole.Agent(approval=...)` 指定，可选 `gole.approval.Console()`（终端 y/n）、`Callback(fn)` 或 `Webhook(url)`（v0.8 起）。没有指定审批方式时，需要确认的工具不会执行，模型会收到拒绝原因；`gole chat` 默认使用终端确认。
 - **资源上限**：`max_steps`、`timeout`、`TokenBudget` 中间件，防止死循环和费用失控。
-- **沙箱**：`python` 工具默认在子进程中运行，带超时且禁网；可改为 `sandbox="docker"`。`files` 必须指定 `root`，`shell` 默认需要确认。
+- **沙箱**：`python` 工具在子进程中运行，带超时且禁网，但这不是安全边界，所以它和 `shell` 一样默认需要确认；v0.8 起可改为 `sandbox="docker"`。`files` 必须指定 `root`，默认只读。
 - **提示词注入防护**：工具返回和检索片段默认用标记包裹，并在系统提示中声明为不可信数据。
 
 ### 9.3 持久化与恢复
@@ -818,7 +834,7 @@ gole serve my_agent.py:agent --port 8000
 | `gole run <flow.yaml>` | 运行工作流 |
 | `gole serve <target>` | 启动 HTTP 服务 |
 | `gole engines` | 列出已安装的运行引擎及其能力 |
-| `gole kb build <dir>` | 预先构建知识库索引 |
+| `gole kb build <source...>` | 预先构建知识库索引；可选 `--embedding`、`--store`、`--name` |
 | `gole trace <run_id>` | 查看某次运行的轨迹 |
 
 ## 10. 后端适配矩阵与路线图
