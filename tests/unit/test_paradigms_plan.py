@@ -73,7 +73,9 @@ async def test_unparseable_plan_is_retried_then_runs_as_one_step():
     result = await agent.arun("find the cause")
     assert result.text == "answer"
     retry = planner.requests[1]["messages"]
-    assert retry[-2].content == "I would first look around." and "无法解析" in (retry[-1].content or "")
+    assert retry[-2].content == "I would first look around." and "无法解析" in (
+        retry[-1].content or ""
+    )
     errors = [e for e in result.trace.events if e.type == "error"]
     assert len(errors) == 1 and errors[0].recoverable
     assert "当前步骤：find the cause" in last_user(executor.requests[0])

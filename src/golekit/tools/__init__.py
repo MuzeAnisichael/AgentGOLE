@@ -20,6 +20,7 @@ class _ExternalTool:
     def __init__(self, wrapped: Tool) -> None:
         self._wrapped = wrapped
         self.spec = wrapped.spec
+        self.confirm = bool(getattr(wrapped, "confirm", False))
 
     def validate_arguments(self, arguments: dict[str, Any]) -> None:
         validate_arguments(self._wrapped, arguments)

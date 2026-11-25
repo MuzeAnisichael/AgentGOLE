@@ -84,10 +84,12 @@ class FunctionTool:
         description: str | None,
         timeout: float,
         retries: int,
+        confirm: bool = False,
     ) -> None:
         if timeout <= 0 or retries < 0:
             raise ValueError("Timeout must be positive and retries must be nonnegative")
         self._fn = fn
+        self.confirm = confirm
         self._timeout = timeout
         self._retries = retries
         fields: dict[str, Any] = {}
@@ -142,6 +144,7 @@ def tool(
     description: str | None = None,
     timeout: float = 30,
     retries: int = 0,
+    confirm: bool = False,
 ) -> Tool: ...
 
 
@@ -153,6 +156,7 @@ def tool(
     description: str | None = None,
     timeout: float = 30,
     retries: int = 0,
+    confirm: bool = False,
 ) -> Callable[[Callable[..., Any]], Tool]: ...
 
 
@@ -163,10 +167,14 @@ def tool(
     description: str | None = None,
     timeout: float = 30,
     retries: int = 0,
+    confirm: bool = False,
 ) -> Tool | Callable[[Callable[..., Any]], Tool]:
-    """Decorate a typed sync or async function with a validated tool interface."""
+    """Decorate a typed sync or async function with a validated tool interface.
+
+    ``confirm=True`` requires approval before each call; see ``gole.Agent(approval=...)``.
+    """
 
     def decorate(function: Callable[..., Any]) -> Tool:
-        return FunctionTool(function, name, description, timeout, retries)
+        return FunctionTool(function, name, description, timeout, retries, confirm)
 
     return decorate if fn is None else decorate(fn)

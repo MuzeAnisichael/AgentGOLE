@@ -9,7 +9,7 @@ from pathlib import Path
 from time import monotonic
 from uuid import uuid4
 
-from .. import Agent, Embedding, Knowledge, Model
+from .. import Agent, Embedding, Knowledge, Model, approval
 from .._sync import run_sync
 from ..config import default_model, load_config
 from ..errors import ConfigError, GoleError
@@ -98,6 +98,8 @@ def _chat(target: str | None, model: str | None) -> int:
     if target and model:
         agent._binding = Model(model)._binding
         agent._bind_memory()
+    if agent._approval is None:
+        agent._approval = approval.Console()
     session = "default"
     while True:
         try:

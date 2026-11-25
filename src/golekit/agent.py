@@ -18,7 +18,16 @@ from .model import Model, _Binding, _check_mode
 from .models import create_client
 from .models.embedding import resolve_embedding
 from .paradigms import Auto, React
-from .protocols import EventCallback, EventSink, Memory, ModelClient, Paradigm, StepContext, Tool
+from .protocols import (
+    Approver,
+    EventCallback,
+    EventSink,
+    Memory,
+    ModelClient,
+    Paradigm,
+    StepContext,
+    Tool,
+)
 from .protocols.types import Chunk, Event, Result, ToolMode
 from .tools import resolve_tools
 from .trace import LiveTrace
@@ -53,9 +62,13 @@ class Agent:
         max_steps: int = 20,
         timeout: float | None = None,
         tool_mode: ToolMode | None = None,
+        approval: Approver | None = None,
         verbose: bool = False,
     ) -> None:
         _check_mode(tool_mode)
+        if approval is not None and not isinstance(approval, Approver):
+            raise ConfigError("Pass approval=None, approval.Console() or approval.Callback(fn).")
+        self._approval = approval
         if isinstance(model, Model):
             self._binding = model._binding
         elif model is None or isinstance(model, str):
@@ -224,6 +237,7 @@ class Agent:
             run_id=run_id,
             report_error=report_error,
             downgrade=self._binding.downgrade,
+            approver=self._approval,
         )
         return await execute(
             input,
