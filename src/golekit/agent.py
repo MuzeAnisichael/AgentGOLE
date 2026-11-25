@@ -139,7 +139,7 @@ class Agent:
             memory_tools = getattr(self._memory, "tools", None)
             if (
                 self._tools
-                or (callable(memory_tools) and memory_tools())
+                or (callable(memory_tools) and memory_tools(session="default"))
                 or knowledge_mode == "tool"
             ):
                 raise ConfigError(
