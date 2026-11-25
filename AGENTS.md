@@ -1,4 +1,4 @@
-# AGENTS.md · AgentGOLE 开发规则（编码 Agent 必读）
+# AGENTS.md · GoleKit 开发规则（编码 Agent 必读）
 
 这份文件是你在本仓库工作的硬性规则。你负责**实现**；设计决策由项目负责人和审核方做出，记录在 `docs/` 里。
 

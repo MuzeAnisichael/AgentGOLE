@@ -1,4 +1,4 @@
-# AgentGOLE 开发计划与路线图（v0.1 → v1.0）
+# GoleKit 开发计划与路线图（v0.1 → v1.0）
 
 > 本文件导出自项目文档「开发计划与路线图」页（2026-11-12）。版本范围以本文为准；每个版本开工前，会另外下发 `docs/tasks/v0.X.md` 任务书，任务书里的细节优先于本文。
 
@@ -190,7 +190,7 @@ golekit/
 
 ### v0.6 内核开放与服务化（L5）
 
-目标：开发者能以 AgentGOLE 为内核做扩展和部署。
+目标：开发者能以 GoleKit 为内核做扩展和部署。
 
 - [ ] `protocols/` 定稿并写成文档；`Action` 补齐 `Delegate`、`AskHuman`
 - [ ] `kernel/middleware.py`：`Retry`、`TokenBudget`、`Cache`、`PIIMask`；`@agent.middleware`
@@ -212,7 +212,7 @@ golekit/
 目标：`engine="langgraph"` 下，同一段业务代码交给 LangGraph 运行。
 
 - [ ] `engines/`：`Engine` 协议、能力矩阵、`EngineCapabilityError`、`gole engines`
-- [ ] `engines/langgraph`：Agent 与 Workflow 映射为 LangGraph 图；工具、记忆映射；回调桥接为 AgentGOLE 事件
+- [ ] `engines/langgraph`：Agent 与 Workflow 映射为 LangGraph 图；工具、记忆映射；回调桥接为 GoleKit 事件
 - [ ] `flow.compile("langgraph")` 与 `agent.native`
 - [ ] `tests/crossmode/`：同一套 Cookbook 用例在 A / B / C 三种模式下运行
 

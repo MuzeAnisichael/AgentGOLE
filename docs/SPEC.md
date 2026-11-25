@@ -1,10 +1,10 @@
-# AgentGOLE · Agent 内核库使用文档（草案 v0.2）
+# GoleKit · Agent 内核库使用文档（草案 v0.2）
 
-> 本文件导出自项目使用文档（草案 v0.2，2026-11-12）。它是 AgentGOLE 对外行为的**唯一事实来源**：公共 API、命名和默认值以本文为准。实现中如需偏离，必须在阶段报告的「偏差与决策」里写明。
+> 本文件导出自项目使用文档（草案 v0.2，2026-11-12）。它是 GoleKit 对外行为的**唯一事实来源**：公共 API、命名和默认值以本文为准。实现中如需偏离，必须在阶段报告的「偏差与决策」里写明。
 
 ## 1. 项目定位与目标
 
-AgentGOLE（暂定名）是一个 Python Agent 内核库：配好一个模型，3 行代码就能跑起一个 Agent；之后用同一套接口，一路扩展到工具、记忆、知识库、工作流和多智能体。名字取自 LEGO 的字母重排，意思是像拼乐高一样拼装 Agent。
+GoleKit 是一个 Python Agent 内核库：配好一个模型，3 行代码就能跑起一个 Agent；之后用同一套接口，一路扩展到工具、记忆、知识库、工作流和多智能体。名字取自 LEGO 的字母重排，意思是像拼乐高一样拼装 Agent。
 
 ### 1.1 要解决的问题
 
@@ -17,7 +17,7 @@ AgentGOLE（暂定名）是一个 Python Agent 内核库：配好一个模型，
 
 提供一套统一的组件接口（Model / Tool / Paradigm / Memory / Knowledge / Workflow / Team），每个组件都内置零额外依赖的最简实现，开箱可跑。更强的实现则按需接入现有框架，作为可替换的「后端」。
 
-内核本身也可以自由选择：用 AgentGOLE 自有内核、自有内核 + 框架组件，或者不用自有内核、完全交给现有框架运行（见 §2.2）。
+内核本身也可以自由选择：用 GoleKit 自有内核、自有内核 + 框架组件，或者不用自有内核、完全交给现有框架运行（见 §2.2）。
 
 ### 1.3 目标用户
 
@@ -25,7 +25,7 @@ AgentGOLE（暂定名）是一个 Python Agent 内核库：配好一个模型，
 | --- | --- | --- |
 | 初学者 / 学生 | 几行代码看到 Agent 跑起来，借此理解工具调用、记忆、RAG 是什么 | L0–L2 |
 | 应用开发者 | 快速搭出业务 Agent 或 Workflow；换模型、换组件不改业务代码 | L1–L4 |
-| 内核开发者 / 研究者 | 以 AgentGOLE 为内核自定义范式、记忆和运行时，或横向对比不同技术选型 | L4–L5 |
+| 内核开发者 / 研究者 | 以 GoleKit 为内核自定义范式、记忆和运行时，或横向对比不同技术选型 | L4–L5 |
 
 三类用户同时兼顾：v0.1–0.3 先保证 L0–L3 对初学者足够简单；之后每个版本逐步扩展更高层级的用法，以及可封装的框架和外部工具（见 §10.2）。
 
@@ -45,7 +45,7 @@ AgentGOLE（暂定名）是一个 Python Agent 内核库：配好一个模型，
 
 ## 2. 设计理念
 
-AgentGOLE 的所有 API 形态都由五条原则决定：渐进式复杂度、统一接口可插拔后端、字符串即配置对象即控制、随时可逃生、本地优先。
+GoleKit 的所有 API 形态都由五条原则决定：渐进式复杂度、统一接口可插拔后端、字符串即配置对象即控制、随时可逃生、本地优先。
 
 1. **渐进式复杂度**：多一个需求，只多写一两行代码。初学者不必知道 Paradigm、Runtime 的存在，需要时它们一直都在。
 2. **统一接口，可插拔后端**：每类组件只有一套接口。内置实现零额外依赖、开箱即用；LangChain、LlamaIndex、mem0 等作为可选后端，用 `backend=` 切换，业务代码不变；连内核本身也能替换（§2.2）。
@@ -74,7 +74,7 @@ index = agent.knowledge.native
 
 ### 2.1 架构总览
 
-AgentGOLE 分四层，你的代码只面对最上面两层；下面两层都可以替换。
+GoleKit 分四层，你的代码只面对最上面两层；下面两层都可以替换。
 
 ```text
 ┌──────────────────────────────────────────────────────────────┐
@@ -83,7 +83,7 @@ AgentGOLE 分四层，你的代码只面对最上面两层；下面两层都可�
 └──────────────────────────────────────────────────────────────┘
                               ↓
 ┌──────────────────────────────────────────────────────────────┐
-│ 核心层 · 统一组件接口与运行时（AgentGOLE 内核）                   │
+│ 核心层 · 统一组件接口与运行时（GoleKit 内核）                   │
 │   Model · Tool · Paradigm · Memory · Knowledge · Runtime(事件·Hooks)│
 └──────────────────────────────────────────────────────────────┘
                               ↓
@@ -112,26 +112,26 @@ AgentGOLE 分四层，你的代码只面对最上面两层；下面两层都可�
             ┌──────────────┐          ┌──────────────┐               ┌──────────────┐
 统一 API    │ Agent/Workflow/Team │   │ Agent/Workflow/Team │        │ Agent/Workflow/Team │
             └──────┬───────┘          └──────┬───────┘               └──────┬───────┘
-运行循环    [ AgentGOLE 内核 ]         [ AgentGOLE 内核 ]               [ 框架运行时 ]
+运行循环    [ GoleKit 内核 ]         [ GoleKit 内核 ]               [ 框架运行时 ]
                    │                         │                              │
-组件        内置组件（零额外依赖）      框架组件 mem0·LlamaIndex·MCP 等   框架自带组件（由 AgentGOLE 映射）
+组件        内置组件（零额外依赖）      框架组件 mem0·LlamaIndex·MCP 等   框架自带组件（由 GoleKit 映射）
 适合        入门学习、离线、自研范式    用成熟组件，保留内核控制力        复用已有框架资产与生态
 ```
 
-方括号标出运行循环由谁驱动：模式 A 和 B 由 AgentGOLE 内核驱动，模式 C 把循环交给框架，AgentGOLE 只保留最上面的统一 API。
+方括号标出运行循环由谁驱动：模式 A 和 B 由 GoleKit 内核驱动，模式 C 把循环交给框架，GoleKit 只保留最上面的统一 API。
 
 ```python
 # 模式 A：原生内核（默认），全部使用内置组件
 agent = gole.Agent(model="ollama/qwen3:8b", memory="long", knowledge="./docs")
 
-# 模式 B：AgentGOLE 内核 + 框架组件
+# 模式 B：GoleKit 内核 + 框架组件
 agent = gole.Agent(
     model="ollama/qwen3:8b",
     memory=gole.memory.LongTerm(backend="mem0"),
     knowledge=gole.Knowledge("./docs", backend="llamaindex"),
 )
 
-# 模式 C：框架托管，AgentGOLE 只提供统一接口并负责映射
+# 模式 C：框架托管，GoleKit 只提供统一接口并负责映射
 agent = gole.Agent(model="ollama/qwen3:8b", memory="long", knowledge="./docs", engine="langgraph")
 agent.native   # LangGraph 的编译图，可继续使用它的生态工具
 ```
@@ -143,7 +143,7 @@ agent.native   # LangGraph 的编译图，可继续使用它的生态工具
 | 统一 API（run / stream / as\_tool） | 支持 | 支持 | 支持 |
 | 零额外依赖 | 是 | 否 | 否 |
 | 事件粒度 | 完整 | 完整 | 取决于框架提供的回调 |
-| 工具审批、检查点恢复 | AgentGOLE 实现 | AgentGOLE 实现 | 映射到框架自身机制 |
+| 工具审批、检查点恢复 | GoleKit 实现 | GoleKit 实现 | 映射到框架自身机制 |
 | 自定义范式、手动驱动（§8.3–8.4） | 支持 | 支持 | 视引擎而定 |
 | 本地模型工具调用降级 | 支持 | 支持 | 视引擎而定 |
 
@@ -156,11 +156,11 @@ agent.native   # LangGraph 的编译图，可继续使用它的生态工具
 | 参考项目 | 借鉴 | 不照搬 |
 | --- | --- | --- |
 | [NanoHarness](https://github.com/HabitGraylight/NanoHarness) | 内核拆成六个关注点，每个一个小接口；最小默认实现 + 扩展包 + 声明式 Profile（YAML / TOML / JSON）；内核只依赖 Pydantic 和 PyYAML | 面向编码 Agent 的示例与扩展；入口 API 需要更简单 |
-| [Minimal Local Agent](https://github.com/MuzeAnisichael/minimal-local-agent) | 运行时策略与预算、受限工具、可审查可回滚的编辑、可审计的运行记录；本地优先的模型适配 | 单工作区、编码任务导向的工具集；它要求模型支持工具调用，而 AgentGOLE 需要提示词降级 |
+| [Minimal Local Agent](https://github.com/MuzeAnisichael/minimal-local-agent) | 运行时策略与预算、受限工具、可审查可回滚的编辑、可审计的运行记录；本地优先的模型适配 | 单工作区、编码任务导向的工具集；它要求模型支持工具调用，而 GoleKit 需要提示词降级 |
 
-选 NanoHarness 做骨架，是因为它的六个接口几乎一一对应 AgentGOLE 的组件，且不绑定编码场景：
+选 NanoHarness 做骨架，是因为它的六个接口几乎一一对应 GoleKit 的组件，且不绑定编码场景：
 
-| NanoHarness 关注点 | NanoHarness 接口 | AgentGOLE 中的对应 |
+| NanoHarness 关注点 | NanoHarness 接口 | GoleKit 中的对应 |
 | --- | --- | --- |
 | 执行 Execution | `NanoEngine` | Runtime + Paradigm |
 | 工具 Tools | `BaseToolRegistry` | Tool 注册表；调用路径：工具调用 → 策略 → 审批 → 执行 |
@@ -169,7 +169,7 @@ agent.native   # LangGraph 的编译图，可继续使用它的生态工具
 | 生命周期 Lifecycle | `BaseHookManager` | 事件、Hook、中间件 |
 | 评估 Evaluation | `BaseEvaluator` | 运行轨迹、提前终止、Reflect 校验 |
 
-两个项目都是 MIT 许可；AgentGOLE 采用 Apache-2.0，复用其代码时需保留原 MIT 版权声明（放入 `NOTICE` 或第三方许可目录）。
+两个项目都是 MIT 许可；GoleKit 采用 Apache-2.0，复用其代码时需保留原 MIT 版权声明（放入 `NOTICE` 或第三方许可目录）。
 
 ## 3. 安装与模型配置
 
@@ -321,7 +321,7 @@ gole chat my_agent.py:agent      # 和你在代码里定义的 Agent 聊天
 
 ## 5. 复杂度阶梯 L0–L5
 
-AgentGOLE 把能力分成六级台阶，每升一级只新增一两个概念；教程、示例和报错提示都按这个阶梯组织。
+GoleKit 把能力分成六级台阶，每升一级只新增一两个概念；教程、示例和报错提示都按这个阶梯组织。
 
 | 级别 | 新学的概念 | 新增代码量 | 典型场景 |
 | --- | --- | --- | --- |
@@ -424,7 +424,7 @@ embed = gole.Embedding("ollama/bge-m3")   # 嵌入模型，供记忆与知识库
 
 - **工具调用降级**：`tool_mode="auto"`（默认）先探测模型能力，支持原生函数调用就用原生，否则用提示词约定格式并解析；也可以强制指定 `"native"` 或 `"prompt"`。`gole.Model` 和 `gole.Agent` 都接受 `tool_mode`，Agent 上的设置优先；没有注册任何工具时，不使用提示词协议，直接对话。
 - **降级分阶段建设**：v0.1 提供通用 ReAct 模板、损坏 JSON 修复和带报错信息的重试；v0.3 起接入推理后端的约束解码（Ollama 结构化输出、vLLM guided decoding、llama.cpp GBNF），并发布小模型工具调用成功率基准。后端支持按 JSON Schema 约束输出时自动启用，`gole.Model(..., constrained=True / False)` 可以强制开关。
-- **上下文长度**：本地推理服务实际可用的上下文往往比模型标称的小，超出的部分会被静默截断。`gole.Model(..., context=8192)`、环境变量 `GOLE_CONTEXT` 或 gole.yaml 的 `providers.<provider>.context` 可以把实际值告诉 AgentGOLE；提示词用量达到 90% 时会记一条 warning，`model_end` 事件带 `context_used`，`gole doctor` 也会显示这个值。自动压缩在 v0.8 提供。
+- **上下文长度**：本地推理服务实际可用的上下文往往比模型标称的小，超出的部分会被静默截断。`gole.Model(..., context=8192)`、环境变量 `GOLE_CONTEXT` 或 gole.yaml 的 `providers.<provider>.context` 可以把实际值告诉 GoleKit；提示词用量达到 90% 时会记一条 warning，`model_end` 事件带 `context_used`，`gole doctor` 也会显示这个值。自动压缩在 v0.8 提供。
 - **多模型分工**：记忆摘要、规划、评审等环节可以各自指定模型，例如用小模型做摘要：`gole.Agent(model=smart, memory=gole.memory.Summary(model=fast))`。
 
 ### 6.2 Tool 工具
@@ -642,7 +642,7 @@ flow = intake >> team >> gole.prompt("把报告压缩成 300 字摘要：\n{inpu
 
 ## 8. 作为内核使用
 
-开发者可以把 AgentGOLE 当作 Agent 内核嵌入自己的产品：订阅事件、插入中间件、替换任意组件，或者手动驱动运行循环。
+开发者可以把 GoleKit 当作 Agent 内核嵌入自己的产品：订阅事件、插入中间件、替换任意组件，或者手动驱动运行循环。
 
 ### 8.1 事件
 
@@ -852,7 +852,7 @@ gole serve my_agent.py:agent --port 8000
 | Workflow | 内置 DAG 运行时 | LangGraph | `golekit[langgraph]` |
 | Team | router / supervisor / handoff / debate | AutoGen、CrewAI（待调研） | — |
 | Trace | 终端、JSON、HTML | OpenTelemetry、Langfuse | `golekit[otel]` |
-| Engine（运行引擎，模式 C） | native（AgentGOLE 原生内核） | LangGraph 首个接入；LlamaIndex、smolagents、OpenAI Agents SDK 等随路线图逐步评估接入 | `golekit[langgraph]` 等 |
+| Engine（运行引擎，模式 C） | native（GoleKit 原生内核） | LangGraph 首个接入；LlamaIndex、smolagents、OpenAI Agents SDK 等随路线图逐步评估接入 | `golekit[langgraph]` 等 |
 
 ### 10.2 版本路线图
 
@@ -922,7 +922,7 @@ report = search >> outline >> writer
 print(report.run("2026 年开源 Agent 框架格局", checkpoint="sqlite:///.gole/runs.db"))
 ```
 
-### 11.4 把 AgentGOLE 嵌入已有的 FastAPI 项目（L5）
+### 11.4 把 GoleKit 嵌入已有的 FastAPI 项目（L5）
 
 ```python
 from fastapi import FastAPI
@@ -963,6 +963,6 @@ agent = gole.Agent(
 | 5 | 内置实现做多厚 | 教学级最简版 / 单机可用 / 可生产 | 已定：单机可用，生产级交给后端（§6） |
 | 6 | 本地模型工具调用降级 | 作为核心卖点 / 只做基础兼容 | 已定：分阶段投入（§6.1） |
 | 7 | 声明式定义（YAML） | 提供 / 不提供 | 已定：提供，代码优先 |
-| 8 | 项目名称 | 芥子 / 七巧 / 鹊桥 / AgentGOLE 等 | 已定（暂定）：AgentGOLE，取自 LEGO 的字母重排；PyPI 包名 golekit（2026-11-25 由 agentgole 改名，见 DECISIONS D-014），命令行 gole |
+| 8 | 项目名称 | 芥子 / 七巧 / 鹊桥 / AgentGOLE 等 | 已定：GoleKit，其中 GOLE 取自 LEGO 的字母重排；PyPI 包名 golekit，命令行 gole。2026-11-25 由 AgentGOLE / agentgole 改名，见 DECISIONS D-014 |
 | 9 | 语言 | 仅 Python / 后续加 TypeScript | 已定：首发仅 Python |
 | 10 | 开源协议 | Apache-2.0 / MIT | 已定：Apache-2.0 |

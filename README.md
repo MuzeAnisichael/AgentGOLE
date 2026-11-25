@@ -1,4 +1,4 @@
-# AgentGOLE
+# GoleKit
 
 在项目目录安装（Python 3.11 及以上）。
 

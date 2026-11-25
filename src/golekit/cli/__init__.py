@@ -12,7 +12,7 @@ from uuid import uuid4
 from .. import Agent, Embedding, Knowledge, Model
 from .._sync import run_sync
 from ..config import default_model, load_config
-from ..errors import AgentGoleError, ConfigError
+from ..errors import ConfigError, GoleError
 from ..models import create_client
 from . import messages as msg
 
@@ -58,7 +58,7 @@ async def _doctor() -> int:
             await client.check_connection()
             caps = await client.probe()
             print(msg.OK.format(client.name, msg.NATIVE if caps.tools else msg.PROMPT_MODE))
-        except AgentGoleError as exc:
+        except GoleError as exc:
             key = re.search(r"\b[A-Z][A-Z0-9_]+_API_KEY\b", str(exc))
             reason = (
                 msg.MISSING.format(key.group())
@@ -118,7 +118,7 @@ def _chat(target: str | None, model: str | None) -> int:
                         wrote_text = True
                     elif not wrote_text:
                         print(ev.result.text, end="")
-            except (AgentGoleError, OSError) as exc:
+            except (GoleError, OSError) as exc:
                 print(msg.FAILED.format(exc), file=sys.stderr)
             print()
 
@@ -155,6 +155,6 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "doctor":
             return run_sync(_doctor())
         return _chat(args.target, args.model)
-    except (AgentGoleError, OSError) as exc:
+    except (GoleError, OSError) as exc:
         print(msg.FAILED.format(exc), file=sys.stderr)
         return 1

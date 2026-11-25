@@ -12,7 +12,7 @@
 | D-004 | 内置实现做到「单机可用」，生产级能力交给模式 B / C 的后端 | 避免重复造轮子，又保证模式 A 能用于真实项目 | SPEC §12 #5 |
 | D-005 | 本地模型的工具调用降级分阶段建设：v0.1 做基础兼容，v0.3 做约束解码和基准测试 | 先保证能用，再用数据决定投入 | SPEC §12 #6 |
 | D-006 | 提供 YAML 声明式定义，但代码优先 | — | SPEC §12 #7 |
-| D-007 | 项目名暂定 AgentGOLE；PyPI 包名 `agentgole`，惯用导入 `import agentgole as gole`，命令行 `gole`。包名和导入名已被 D-014 取代 | — | SPEC §12 #8 |
+| D-007 | 项目名暂定 AgentGOLE；PyPI 包名 `agentgole`，惯用导入 `import agentgole as gole`，命令行 `gole`。项目名、包名和导入名已被 D-014 取代 | — | SPEC §12 #8 |
 | D-008 | 首发只支持 Python ≥ 3.11，许可证 Apache-2.0 | 3.10 已停止维护 | SPEC §12 #9、#10 |
 | D-009 | 核心运行时依赖只有 httpx、pydantic、pyyaml；其他能力一律通过 extras 安装 | 「3 行代码」体验和轻量安装 | SPEC §1.4 |
 
@@ -65,7 +65,7 @@
 | D-306 | `web_search` 的搜索提供方可配置，本版内置 `duckduckgo`（默认，无需密钥）和 `tavily`（需要 `TAVILY_API_KEY`） | 默认零配置可用；需要稳定结果时换成有密钥的服务 | v0.3 任务书 §3.4 |
 | D-307 | 约束解码统一走 OpenAI 兼容的 `response_format` JSON Schema 字段，只加在不带原生工具的模型调用上。prompt 模式下用它约束「选哪个工具、参数是什么」；最终回答另起一次不受约束的调用生成 | 一种线上格式覆盖 Ollama、vLLM、llama.cpp 和 LM Studio；最终回答不放进 JSON，才能保持流式和文本质量 | v0.3 任务书 §3.5 |
 | D-308 | 工具调用基准的脚本和结果放在 `benchmarks/tool_calling/`，结果文件为 `RESULTS.md`；审核方审核后摘录进 SPEC | `docs/` 由审核方维护，开发方不改 | v0.3 任务书 §3.6 |
-| D-309 | 上下文长度的最小版提前到 v0.3：长度可配置（`context=`、`GOLE_CONTEXT`、gole.yaml），提示词用量达到 90% 时记 warning 并在 `model_end` 上带 `context_used`，`gole doctor` 显示该值。压缩和 `TokenBudget` 仍在 v0.8。AgentGOLE 不修改服务端的上下文长度，只记录它 | 本地推理服务超出上下文时静默截断，表现为「模型不理工具」，并且会污染工具调用基准的数据 | 设计评估第 2 点 |
+| D-309 | 上下文长度的最小版提前到 v0.3：长度可配置（`context=`、`GOLE_CONTEXT`、gole.yaml），提示词用量达到 90% 时记 warning 并在 `model_end` 上带 `context_used`，`gole doctor` 显示该值。压缩和 `TokenBudget` 仍在 v0.8。GoleKit 不修改服务端的上下文长度，只记录它 | 本地推理服务超出上下文时静默截断，表现为「模型不理工具」，并且会污染工具调用基准的数据 | 设计评估第 2 点 |
 | D-310 | 工具调用路径实现为内部的拦截链，v0.3 固定三环：参数校验、审批、执行。不导出，不提供注册接口 | 审批是这条链的第一个真实用例；v0.4 的内核整形和 v0.6 的中间件在它上面扩展，不必推倒重写 | 设计评估第 3 点 |
 | D-311 | `trace.to_json` 从 v0.8 提前到 v0.3，并增加 `GOLE_TRACE_DIR` 自动落盘；run 失败时轨迹挂在异常的 `trace` 属性上 | 审核和开发现在是同一方，项目负责人的本机 live 验收是唯一独立的环节；验收失败时要能把轨迹文件直接发回来 | 设计评估第 6 点 |
 | D-312 | 降级解析用语料测试：样本来自基准和 live 里真实出现的坏输出，数量不受测试纪律的上限约束 | 两次审核的「必须」问题都靠审核方的一次性脚本才发现；降级解析是核心卖点，值得长期保留的回归样本 | 设计评估第 5 点 |
@@ -85,4 +85,4 @@
 
 | 编号 | 决策 | 理由 | 来源 |
 | --- | --- | --- | --- |
-| D-014 | PyPI 发布名和导入包名由 `agentgole` 改为 `golekit`，惯用导入 `import golekit as gole`；日志名为 `golekit.<module>`，插件入口组为 `golekit.plugins`，extras 写作 `golekit[rag]`。命令行 `gole`、配置文件 `gole.yaml`、环境变量 `GOLE_*` 和数据目录 `.gole/` 都不变。v0.2 及更早的任务书和阶段报告是历史记录，保留旧名不改 | `agentgole` 放在 PyPI 上太长；最理想的 `gole` 已被他人注册。项目还在 v0.2，尚未发布，现在改代价最小 | 项目负责人，2026-11-25 |
+| D-014 | 项目名由 AgentGOLE 改为 GoleKit，GitHub 仓库相应改名为 `golekit`。PyPI 发布名和导入包名由 `agentgole` 改为 `golekit`，惯用导入 `import golekit as gole`；异常基类由 `AgentGoleError` 改为 `GoleError`；日志名为 `golekit.<module>`，插件入口组为 `golekit.plugins`，extras 写作 `golekit[rag]`。命令行 `gole`、配置文件 `gole.yaml`、环境变量 `GOLE_*` 和数据目录 `.gole/` 都不变。v0.2 及更早的任务书和阶段报告是历史记录，保留旧名不改 | `agentgole` 放在 PyPI 上太长；最理想的 `gole` 已被他人注册。项目名、包名和仓库名保持一致，使用者不必记两个名字。项目还在 v0.2，尚未发布，现在改代价最小 | 项目负责人，2026-11-25 |

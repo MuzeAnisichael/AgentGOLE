@@ -1,4 +1,4 @@
-# AgentGOLE 开发指导
+# GoleKit 开发指导
 
 本文规定**怎么做**：工程约定、版本流程、multi-agent 分工、测试纪律、Git 规范，以及与审核方的协作循环。**做什么**由 `docs/tasks/v0.X.md` 和 `docs/SPEC.md` 规定。
 
@@ -21,7 +21,7 @@
 - **公共 API**：只从 `golekit/__init__.py` 导出，并用 `__all__` 显式列出。其余模块都算内部实现，可以随时调整。
 - **可选依赖**：只能在函数内部 import；捕获 `ImportError` 后，抛出带安装命令的 `MissingDependencyError`。
 - **配置优先级**：显式参数 > 环境变量 > `gole.yaml` > 默认值。密钥只从环境变量读取，绝不写进日志或报错信息。
-- **错误**：异常统一定义在 `errors.py`，基类为 `AgentGoleError`。面向用户的报错要告诉对方下一步怎么做，例如缺少的环境变量名、该装的 extra。
+- **错误**：异常统一定义在 `errors.py`，基类为 `GoleError`。面向用户的报错要告诉对方下一步怎么做，例如缺少的环境变量名、该装的 extra。
 - **日志**：用 `logging.getLogger("golekit.<module>")`。库代码不 `print`（CLI 和 `verbose` 输出除外），也不配置 root logger。
 - **禁止**：
   - import 时发起网络请求或读写文件；
