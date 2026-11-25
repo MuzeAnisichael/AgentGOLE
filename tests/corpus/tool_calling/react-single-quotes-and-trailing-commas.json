@@ -1,0 +1,35 @@
+{
+  "source": "tests/unit/test_paradigms.py",
+  "protocol": "react",
+  "tools": [
+    {
+      "name": "find",
+      "description": "Find a record.",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "ids"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      }
+    }
+  ],
+  "reply": "Action:\n```json\n{'tool':'find', 'arguments':{'ids':[1,],},}",
+  "expected": {
+    "tool": "find",
+    "arguments": {
+      "ids": [
+        1
+      ]
+    }
+  }
+}

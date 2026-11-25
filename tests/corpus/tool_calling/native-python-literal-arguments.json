@@ -1,0 +1,17 @@
+{
+  "source": "tests/unit/test_kernel_engine.py",
+  "protocol": "native",
+  "tools": [
+    {
+      "name": "echo",
+      "description": "Echo a value",
+      "parameters": {}
+    }
+  ],
+  "reply": "{'value': 2,}",
+  "expected": {
+    "arguments": {
+      "value": 2
+    }
+  }
+}

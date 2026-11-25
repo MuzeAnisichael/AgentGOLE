@@ -1,0 +1,26 @@
+{
+  "source": "tests/unit/test_tool_calling_modes.py",
+  "protocol": "react",
+  "tools": [
+    {
+      "name": "weather",
+      "description": "Look up a city's weather.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "city"
+        ],
+        "additionalProperties": false
+      }
+    }
+  ],
+  "reply": "Thought: done\nFinal Answer:  first  second  ",
+  "expected": {
+    "final": "first  second"
+  }
+}

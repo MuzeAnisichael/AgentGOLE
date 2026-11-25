@@ -15,3 +15,6 @@ gole.yaml
 agent_example.py
 
 .gole/
+
+traces/
+benchmarks/tool_calling/traces/

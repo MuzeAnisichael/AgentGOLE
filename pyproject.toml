@@ -28,7 +28,7 @@ include = ["*.py", "*.pyi", "pyproject.toml"]
 extend-exclude = [".worktrees", ".dev-tools", ".uv-cache"]
 
 [tool.pyright]
-include = ["src", "examples", "tests"]
+include = ["src", "examples", "tests", "benchmarks"]
 strict = ["src/golekit/protocols", "src/golekit/kernel"]
 typeCheckingMode = "basic"
 pythonVersion = "3.11"
