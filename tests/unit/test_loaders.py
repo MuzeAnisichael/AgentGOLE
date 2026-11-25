@@ -45,6 +45,23 @@ async def test_missing_explicit_path_fails_and_empty_glob_warns(tmp_path, caplog
     assert "matched no files" in caplog.text
 
 
+async def test_hidden_entries_are_skipped_unless_named(tmp_path, caplog):
+    visible = tmp_path / "a.md"
+    hidden_file = tmp_path / ".draft.md"
+    repo_note = tmp_path / ".git" / "notes.md"
+    store = tmp_path / ".gole" / "kb" / "index.db"
+    nested = tmp_path / "docs" / ".cache" / "b.md"
+    for path in (visible, hidden_file, repo_note, store, nested):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.touch()
+    with caplog.at_level(logging.WARNING):
+        assert await discover_sources([tmp_path]) == [str(visible)]
+        assert await discover_sources([str(tmp_path / "**" / "*.md")]) == [str(visible)]
+    assert "index.db" not in caplog.text
+    assert await discover_sources([repo_note, hidden_file]) == [str(repo_note), str(hidden_file)]
+    assert await discover_sources([tmp_path / ".git"]) == [str(repo_note)]
+
+
 async def test_text_and_markdown_decode_utf8_with_replacement(tmp_path):
     for suffix in (".txt", ".md", ".markdown"):
         source = tmp_path / f"notes{suffix}"

@@ -21,6 +21,7 @@
 
 ### Fixed
 
+- Directory and glob sources skip files and directories whose names start with a dot, unless the path is passed explicitly.
 - A knowledge source path that does not exist raises `ConfigError` instead of building an empty index. A glob without matches logs a warning.
 - Context retrieval no longer injects an empty reference message, places references after the instructions and memory preamble, and leaves the prompt-mode tool protocol on the instructions. A search tool with no match answers 「未找到相关内容。」.
 - A failed memory save, such as a fact extraction error, no longer fails a run whose answer is ready. The run reports a recoverable `error` event and returns its result.

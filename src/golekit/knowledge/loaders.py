@@ -86,8 +86,10 @@ def _discover(sources: Sequence[str | Path]) -> list[str]:
         visited.add(path)
         if path.is_dir():
             for child in sorted(path.iterdir()):
-                if not (child.is_symlink() and child.is_dir()):
-                    visit(child)
+                # Hidden entries such as .git or the index store are only read when named.
+                if child.name.startswith(".") or (child.is_symlink() and child.is_dir()):
+                    continue
+                visit(child)
         elif path.is_file():
             if path.suffix.lower() in _SUPPORTED:
                 found[str(path)] = None
