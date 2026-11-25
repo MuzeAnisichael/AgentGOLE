@@ -28,6 +28,9 @@
 - **BREAKING** Renamed the project to GoleKit and the base exception `AgentGoleError` to `GoleError`.
 - Knowledge indexing and long-term facts use local SQLite files. Built-in stores are intended for single-machine use.
 - A run validates structured answers before emitting their tokens.
+- Model calls made by a custom paradigm are streamed as tokens by default. A paradigm that makes several calls marks the intermediate ones with `CallModel(visible=False)`.
+- A run resolves its model's capabilities when it starts, also when `tool_mode` is set explicitly. For Ollama this is one `/api/show` request per process.
+- A failed fact extraction no longer raises from `Agent.run`; see Fixed.
 - **BREAKING** Native tool-mode runs stream model text as it arrives, including text that precedes a tool call. The tokens after the last `tool_result` event (all tokens when no tool ran) concatenate to `result.text`. `gole chat` puts text written before a tool call on its own line.
 
 ### Fixed
