@@ -96,3 +96,23 @@ async def test_search_tool_reports_no_match(tmp_path):
     model = FakeModel([fake_tool_call("search_policy", {"query": "zebra"}), "unknown"])
     result = await gole.Agent(model, knowledge=kb, knowledge_mode="tool").arun("zebra")
     assert result.steps[1].results[0].output == "未找到相关内容。"
+
+
+async def test_sources_are_shown_relative_to_the_working_directory(tmp_path, monkeypatch):
+    source = tmp_path / "docs" / "policy.md"
+    source.parent.mkdir()
+    source.write_text("审批流程由经理负责。", encoding="utf-8")
+    kb = gole.Knowledge(source, store=tmp_path / "kb", retriever="keyword", name="policy")
+    model = FakeModel(["经理", "经理"])
+    agent = gole.Agent(model, knowledge=kb, knowledge_mode="context", memory=None)
+    result = await agent.arun("审批")
+    assert result.citations[0].source == "docs/policy.md"
+    sent = "".join(m.content or "" for m in model.requests[0]["messages"])
+    assert "[1] (docs/policy.md) " in sent and str(tmp_path) not in sent
+    assert next(e for e in result.trace.events if e.type == "retrieve").chunks[0].source == str(
+        source.resolve()
+    )
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+    assert (await agent.arun("审批")).citations[0].source == "policy.md"

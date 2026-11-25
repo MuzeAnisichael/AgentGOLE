@@ -7,7 +7,7 @@ from ..errors import ConfigError
 from ..protocols import Retriever, StepContext, Tool
 from ..protocols.types import Message, RunState, ToolResult
 from ..tools import tool
-from .events import RunEvents
+from .events import RunEvents, display_source
 
 
 def initial_state(input: str, instructions: str | None, memory: list[Message]) -> RunState:
@@ -54,7 +54,8 @@ async def _search(retriever: Retriever, query: str, events: RunEvents, start: in
     await events.retrieved(query, chunks)
     lines: list[str] = []
     for index, chunk in enumerate(chunks, start):
-        location = chunk.source if chunk.page is None else f"{chunk.source} p.{chunk.page}"
+        source = display_source(chunk.source)
+        location = source if chunk.page is None else f"{source} p.{chunk.page}"
         lines.append(f"[{index}] ({location}) {chunk.text}")
     return "\n".join(lines)
 
