@@ -24,6 +24,8 @@ class _ExternalTool:
     def validate_arguments(self, arguments: dict[str, Any]) -> None:
         validate_arguments(self._wrapped, arguments)
 
+    check_arguments = validate_arguments
+
     async def call(self, **arguments: Any) -> Any:
         self.validate_arguments(arguments)
         async with asyncio.timeout(_DEFAULT_TIMEOUT):

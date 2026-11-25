@@ -14,7 +14,6 @@ from ..errors import (
     RunTimeoutError,
     UnsupportedToolsError,
 )
-from ..paradigms import Auto, React
 from ..protocols import EventSink, Memory, Paradigm, Retriever, StepContext
 from ..protocols.types import (
     Action,
@@ -62,8 +61,7 @@ async def _actions(
     corrections = 0
     next_action: Action | None = None
     validated: Any = None
-    # Tool requests and custom paradigms can replace intermediate prose at Finish.
-    builtin_stream = type(paradigm) in (Auto, React) and schema is None
+    # None while the latest visible reply was emitted as it arrived; otherwise its held deltas.
     pending_tokens: list[str] | None = []
 
     while state.turn < max_steps:
@@ -74,14 +72,27 @@ async def _actions(
         thought: str | None = None
         if isinstance(action, CallModel):
             try:
-                # Native text is forwarded as it arrives, even when a tool call may follow it.
-                # ReAct's explicit answer marker also makes subsequent text final.
-                immediate = builtin_stream and (
-                    ctx.tool_mode == "native" or not ctx.tools or bool(action.emit_tokens_after)
+                # Native text is forwarded even when a tool call may follow it (D-301), and so
+                # is text after an answer marker. A reply that may still turn out to be a
+                # prompt-mode tool request, or that needs validation, is held until Finish.
+                immediate = (
+                    action.visible
+                    and schema is None
+                    and (
+                        ctx.tool_mode == "native"
+                        or bool(action.emit_tokens_after)
+                        or not action.use_tools
+                        or not ctx.tools
+                    )
                 )
                 pending_tokens = None if immediate else []
                 response = await call_model(
-                    action, state.messages, ctx, streaming, events, pending_tokens
+                    action,
+                    state.messages,
+                    ctx,
+                    streaming and action.visible,
+                    events,
+                    pending_tokens,
                 )
             except UnsupportedToolsError as exc:
                 if ctx.tool_mode != "native" or not ctx.tools or not action.use_tools:
@@ -131,7 +142,10 @@ async def _actions(
                 if pending_tokens is None:
                     emitted = _answer_tokens(events)
                     if not action.output.startswith(emitted):
-                        raise ModelError("Streamed text differs from the completed model response.")
+                        raise ModelError(
+                            "Streamed text differs from the final output. "
+                            "Mark intermediate CallModel actions visible=False."
+                        )
                     pieces = [action.output[len(emitted) :]]
                 else:
                     pieces = (
@@ -146,6 +160,11 @@ async def _actions(
         step.duration = monotonic() - started
         state.turn = step.turn
         state.history.append(step)
+        if isinstance(action, CallModel) and next_action is None and state.turn < max_steps:
+            # The paradigm reads the reply first so this step's event can carry its thought.
+            next_action = await paradigm.step(state, ctx)
+            noted = state.scratch.pop("thought", None)
+            thought = noted if isinstance(noted, str) and noted else thought
         await events.send("step", action=step.action, thought=thought)
         if isinstance(action, Finish) and next_action is None:
             events.step = None

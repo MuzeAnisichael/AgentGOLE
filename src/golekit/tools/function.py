@@ -116,6 +116,10 @@ class FunctionTool:
         """Validate a ReAct action as JSON before invoking the function."""
         self._model.model_validate_json(json.dumps(arguments, allow_nan=False), strict=True)
 
+    def check_arguments(self, arguments: dict[str, Any]) -> None:
+        """Raise if a call with these arguments would be rejected before the function runs."""
+        self._model.model_validate(arguments)
+
     async def call(self, **arguments: Any) -> str:
         parsed = self._model.model_validate(arguments)
         values = {name: getattr(parsed, name) for name in self._model.model_fields}

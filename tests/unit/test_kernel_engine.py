@@ -169,14 +169,14 @@ async def test_batch_observation_includes_errors_and_truncated_output():
     assert len(large.output) == 8000 and large.output.endswith("...[truncated]")
 
 
-async def test_stream_marker_split_absent_and_unfiltered():
-    model = FakeModel(["privateFinal:visible", "unfinished", "all"])
+async def test_hidden_calls_emit_no_tokens_and_finish_supplies_the_answer():
+    model = FakeModel(["privateFinal:hidden", "unfinished", "all"])
     harness = Harness(model)
     await harness.run(
         Script(
-            CallModel(emit_tokens_after="Final:"),
-            CallModel(emit_tokens_after="Final:"),
-            CallModel(messages=[], use_tools=False),
+            CallModel(emit_tokens_after="Final:", visible=False),
+            CallModel(visible=False),
+            CallModel(messages=[], use_tools=False, visible=False),
             Finish(output="done"),
         ),
         streaming=True,
@@ -185,6 +185,32 @@ async def test_stream_marker_split_absent_and_unfiltered():
     assert [field(e, "text") for e in tokens] == ["done"]
     assert tokens[0].step == 4
     assert model.requests[-1] == {"messages": [], "tools": None}
+
+
+async def test_call_can_name_its_model_and_paradigm_can_annotate_the_step():
+    class Planned(Script):
+        async def step(self, state, ctx):
+            if state.turn == 1:
+                state.scratch["thought"] = "plan: answer directly"
+            return await super().step(state, ctx)
+
+    primary, helper = CountedModel(["final"]), CountedModel(["draft"], name="helper")
+    harness = Harness(primary)
+    result = await harness.run(
+        Planned(
+            CallModel(model=helper, visible=False, use_tools=False),
+            CallModel(),
+            Finish(output="final"),
+        ),
+        streaming=True,
+    )
+    starts = [field(e, "model") for e in harness.events if e.type == "model_start"]
+    assert starts == ["helper", "fake"]
+    assert len(helper.requests) == len(primary.requests) == 1
+    assert result.usage.total_tokens == 6
+    steps = [e for e in harness.events if e.type == "step"]
+    assert [field(e, "thought") for e in steps] == ["plan: answer directly", None, None]
+    assert "".join(field(e, "text") for e in harness.events if e.type == "token") == "final"
 
 
 async def test_max_steps_includes_finish_and_reports_error():

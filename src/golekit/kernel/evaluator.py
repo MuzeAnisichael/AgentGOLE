@@ -6,9 +6,10 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from ..errors import ModelError, ToolError
-from ..protocols import StepContext
+from ..errors import ModelError
+from ..protocols import ModelClient, StepContext
 from ..protocols.types import CallModel, CallTool, Message, ModelResponse, ToolResult, ToolSpec
+from .chain import Refusal, run_tool
 from .events import RunEvents
 
 
@@ -20,7 +21,8 @@ async def call_model(
     events: RunEvents,
     pending_tokens: list[str] | None,
 ) -> ModelResponse:
-    """Generate a reply and emit visible content deltas when streaming."""
+    """Generate a reply; a streamed call emits its deltas or collects them in pending_tokens."""
+    client = action.model or ctx.model
     messages = conversation if action.messages is None else action.messages
     specs = (
         [tool.spec for tool in ctx.tools.values()]
@@ -28,13 +30,13 @@ async def call_model(
         else []
     )
     started = monotonic()
-    await events.send("model_start", messages=list(messages), model=ctx.model.name)
+    await events.send("model_start", messages=list(messages), model=client.name)
     if streaming:
         response = await _stream_model(
-            messages, specs or None, ctx, action.emit_tokens_after, events, pending_tokens
+            client, messages, specs or None, action.emit_tokens_after, events, pending_tokens
         )
     else:
-        response = await ctx.model.generate(messages, tools=specs or None)
+        response = await client.generate(messages, tools=specs or None)
     await events.send(
         "model_end",
         model=response.model,
@@ -46,9 +48,9 @@ async def call_model(
 
 
 async def _stream_model(
+    client: ModelClient,
     messages: list[Message],
     specs: list[ToolSpec] | None,
-    ctx: StepContext,
     marker: str | None,
     events: RunEvents,
     pending_tokens: list[str] | None,
@@ -58,7 +60,7 @@ async def _stream_model(
     trim_answer = bool(marker) and pending_tokens is None
     started_answer = False
     trailing = ""
-    chunks = ctx.model.stream(messages, tools=specs)
+    chunks = client.stream(messages, tools=specs)
     try:
         async for chunk in chunks:
             if chunk.response is not None:
@@ -118,14 +120,12 @@ async def call_tools(action: CallTool, ctx: StepContext, events: RunEvents) -> l
         await events.send("tool_call", tool=call.name, args=call.arguments)
         error = None
         try:
-            if call.invalid_arguments:
-                raise ToolError("invalid arguments JSON")
-            tool = ctx.tools.get(call.name)
-            if tool is None:
-                raise ToolError(f"Unknown tool '{call.name}'. Choose a registered tool.")
-            output = _serialize(await tool.call(**call.arguments))
+            output = _serialize(await run_tool(call, ctx, events))
+        except Refusal as exc:
+            error = str(exc)
+            output = _serialize(f"Error: {error}")
         except Exception as exc:  # noqa: BLE001 - tool failures become observations
-            error = str(exc) if call.invalid_arguments else f"{type(exc).__name__}: {exc}"
+            error = f"{type(exc).__name__}: {exc}"
             output = _serialize(f"Error: {error}")
         results.append(ToolResult(call_id=call.id, name=call.name, output=output, error=error))
         await events.send(
