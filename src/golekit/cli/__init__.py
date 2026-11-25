@@ -57,7 +57,13 @@ async def _doctor() -> int:
             client = create_client(spec, config=config, retries=0)
             await client.check_connection()
             caps = await client.probe()
-            print(msg.OK.format(client.name, msg.NATIVE if caps.tools else msg.PROMPT_MODE))
+            print(
+                msg.OK.format(
+                    client.name,
+                    msg.NATIVE if caps.tools else msg.PROMPT_MODE,
+                    msg.NATIVE if caps.json_schema else msg.UNSUPPORTED,
+                )
+            )
         except GoleError as exc:
             key = re.search(r"\b[A-Z][A-Z0-9_]+_API_KEY\b", str(exc))
             reason = (
@@ -96,8 +102,7 @@ def _load_agent(target: str, model: str | None) -> Agent:
 def _chat(target: str | None, model: str | None) -> int:
     agent = _load_agent(target, model) if target else Agent(model)
     if target and model:
-        agent._binding = Model(model)._binding
-        agent._bind_memory()
+        agent._use_model(Model(model)._binding)
     if agent._approval is None:
         agent._approval = approval.Console()
     session = "default"

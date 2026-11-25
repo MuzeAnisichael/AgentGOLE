@@ -4,6 +4,12 @@
 
 ### Added
 
+- Added the `direct`, `plan` and `reflect` paradigms and the `golekit.paradigms` namespace. `PlanExecute` and `Reflect` accept separate planner, executor and critic models.
+- Added tool confirmation: `@gole.tool(confirm=True)`, `gole.Agent(approval=...)`, `gole.approval.Console` and `gole.approval.Callback`, and the `approval_required` event. A tool that needs confirmation does not run when no approval method is configured. `gole chat` asks on the terminal.
+- Added the built-in tools `web_search` (DuckDuckGo or Tavily), `web_fetch`, `python`, `shell` and `gole.tools.files(root, write=False)`. `python` and `shell` need confirmation by default; `python` isolation is best effort, not a security boundary.
+- `tools=` accepts lists of tools. gole.yaml accepts `tools.web_search.provider`; `GOLE_SEARCH_PROVIDER` overrides it.
+- Added JSON Schema constrained decoding for structured answers, paradigm-internal calls and prompt-mode tool selection, with `gole.Model(constrained=...)` and `Capabilities.json_schema`. A server that rejects the response format is retried without it and remembered.
+- `gole doctor` reports constrained decoding support for each chat model.
 - Added summary, SQLite long-term and layered memory, with per-session management and memory tools.
 - Added batched embedding clients and incremental local knowledge indexes with keyword, vector and hybrid retrieval.
 - Added optional PDF and Word loaders via the rag extra.

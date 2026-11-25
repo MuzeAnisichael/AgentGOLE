@@ -41,6 +41,7 @@ def test_doctor_reports_capabilities_and_missing_key(tmp_path, monkeypatch, caps
     assert cli.main(["doctor"]) == 1
     lines = capsys.readouterr().out.splitlines()
     assert lines[0].startswith("[ok]   ollama/demo") and "不支持 → 将使用提示词模式" in lines[0]
+    assert "约束解码: 支持" in lines[0]
     assert lines[1].startswith("[fail] openai/demo") and "缺少 OPENAI_API_KEY" in lines[1]
 
 
