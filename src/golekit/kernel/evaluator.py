@@ -6,11 +6,43 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from ..errors import ModelError
+from ..errors import ModelError, UnsupportedSchemaError
 from ..protocols import ModelClient, StepContext
-from ..protocols.types import CallModel, CallTool, Message, ModelResponse, ToolResult, ToolSpec
+from ..protocols.types import (
+    CallModel,
+    CallTool,
+    Capabilities,
+    Message,
+    ModelResponse,
+    ToolResult,
+    ToolSpec,
+)
 from .chain import Refusal, run_tool
 from .events import RunEvents
+
+
+class ModelCalls:
+    """What one run has learned about the models it talks to."""
+
+    def __init__(self, ctx: StepContext) -> None:
+        self._ctx = ctx
+        self._known: dict[int, Capabilities] = {}
+
+    async def capabilities(self, client: ModelClient) -> Capabilities:
+        """Resolve a client's features once per run."""
+        key = id(client)
+        if key not in self._known:
+            shared = self._ctx.capabilities if client is self._ctx.model else None
+            self._known[key] = await (shared() if shared is not None else client.probe())
+        return self._known[key]
+
+    def reject_schema(self, client: ModelClient) -> None:
+        """Stop sending JSON Schema response formats to a client that refused one."""
+        key = id(client)
+        self._known[key] = self._known[key].model_copy(update={"json_schema": False})
+        if client is self._ctx.model:
+            self._ctx.constrained = False
+            self._ctx.downgrade("json_schema")
 
 
 async def call_model(
@@ -20,6 +52,7 @@ async def call_model(
     streaming: bool,
     events: RunEvents,
     pending_tokens: list[str] | None,
+    calls: ModelCalls,
 ) -> ModelResponse:
     """Generate a reply; a streamed call emits its deltas or collects them in pending_tokens."""
     client = action.model or ctx.model
@@ -29,14 +62,41 @@ async def call_model(
         if action.use_tools and ctx.tool_mode == "native"
         else []
     )
+    # Constrained decoding and native tools are never combined in one request (D-307).
+    constrain = (
+        action.response_schema is not None
+        and not specs
+        and (await calls.capabilities(client)).json_schema
+    )
     started = monotonic()
     await events.send("model_start", messages=list(messages), model=client.name)
-    if streaming:
-        response = await _stream_model(
-            client, messages, specs or None, action.emit_tokens_after, events, pending_tokens
-        )
+
+    async def request(params: dict[str, Any]) -> ModelResponse:
+        if streaming:
+            return await _stream_model(
+                client,
+                messages,
+                specs or None,
+                action.emit_tokens_after,
+                events,
+                pending_tokens,
+                params,
+            )
+        return await client.generate(messages, tools=specs or None, **params)
+
+    if constrain:
+        schema = {"name": "response", "schema": action.response_schema}
+        try:
+            response = await request(
+                {"response_format": {"type": "json_schema", "json_schema": schema}}
+            )
+        except UnsupportedSchemaError as exc:
+            # Only a successful plain request proves that the response format was the problem.
+            response = await request({})
+            calls.reject_schema(client)
+            await events.recover(exc)
     else:
-        response = await client.generate(messages, tools=specs or None)
+        response = await request({})
     await events.send(
         "model_end",
         model=response.model,
@@ -54,13 +114,14 @@ async def _stream_model(
     marker: str | None,
     events: RunEvents,
     pending_tokens: list[str] | None,
+    params: dict[str, Any],
 ) -> ModelResponse:
     response = None
     pending = ""
     trim_answer = bool(marker) and pending_tokens is None
     started_answer = False
     trailing = ""
-    chunks = client.stream(messages, tools=specs)
+    chunks = client.stream(messages, tools=specs, **params)
     try:
         async for chunk in chunks:
             if chunk.response is not None:

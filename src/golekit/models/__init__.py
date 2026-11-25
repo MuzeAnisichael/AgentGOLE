@@ -35,6 +35,7 @@ def create_client(
     retries: int = 2,
     transport: httpx.AsyncBaseTransport | None = None,
     embedding: bool = False,
+    constrained: bool | None = None,
 ) -> CompatibleClient:
     """Resolve the model alias, provider endpoint and credentials without network I/O."""
     if "/" not in spec and base_url is None:
@@ -82,5 +83,5 @@ def create_client(
     if max_tokens is not None:
         defaults["max_tokens"] = max_tokens
     return CompatibleClient(
-        provider, model, spec, endpoint, key, defaults, timeout, retries, transport
+        provider, model, spec, endpoint, key, defaults, timeout, retries, transport, constrained
     )

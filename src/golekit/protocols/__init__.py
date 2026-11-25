@@ -103,8 +103,10 @@ class Approver(Protocol):
 class StepContext(BaseModel):
     """Resolved components and event hooks available during an action.
 
-    ``downgrade()`` records that the server rejected native tools.
+    ``downgrade()`` records that the server rejected native tools, and
+    ``downgrade("json_schema")`` that it rejected a JSON Schema response format.
     ``capabilities`` resolves the features of ``model``; without it the engine probes the client.
+    ``constrained`` is set by the engine: ``model`` accepts a JSON Schema response format.
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -116,6 +118,7 @@ class StepContext(BaseModel):
     downgrade: Callable[..., None]
     approver: Approver | None = None
     capabilities: Callable[[], Awaitable[Capabilities]] | None = None
+    constrained: bool = False
 
 
 class Paradigm(Protocol):

@@ -104,7 +104,7 @@ class PlanExecute:
             use_tools=False,
             visible=False,
             model=self._planner or self._agent_model,
-            response_schema=schema.adapter.json_schema(),
+            response_schema=schema.schema,
         )
 
     def _begin(self, state: RunState, run: dict[str, Any]) -> None:

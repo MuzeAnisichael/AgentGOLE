@@ -47,8 +47,9 @@ class OutputSchema:
 
     def __init__(self, output: type):
         self.adapter: TypeAdapter[Any] = TypeAdapter(output)
+        self.schema: dict[str, Any] = self.adapter.json_schema()
         self.instruction = "最终回答只输出一个符合以下 JSON Schema 的 JSON 值。\n" + json.dumps(
-            self.adapter.json_schema(), ensure_ascii=False
+            self.schema, ensure_ascii=False
         )
 
     def validate(self, text: str) -> Any:

@@ -67,7 +67,7 @@ class Reflect:
             use_tools=False,
             visible=False,
             model=self._critic or self._agent_model,
-            response_schema=_VERDICT.adapter.json_schema(),
+            response_schema=_VERDICT.schema,
         )
 
     async def step(self, state: RunState, ctx: StepContext) -> Action:

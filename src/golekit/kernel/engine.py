@@ -29,7 +29,7 @@ from ..protocols.types import (
     Usage,
 )
 from .context import append_results, initial_state, prepare_knowledge
-from .evaluator import call_model, call_tools
+from .evaluator import ModelCalls, call_model, call_tools
 from .events import RunEvents
 
 _logger = logging.getLogger("golekit.kernel.engine")
@@ -56,6 +56,7 @@ async def _actions(
     retrievers: Sequence[Retriever],
     knowledge_mode: str,
     schema: OutputSchema | None,
+    calls: ModelCalls,
 ) -> tuple[str, Usage, Any]:
     usage = Usage()
     corrections = 0
@@ -86,13 +87,23 @@ async def _actions(
                     )
                 )
                 pending_tokens = None if immediate else []
+                request = action
+                if (
+                    schema is not None
+                    and action.visible
+                    and action.response_schema is None
+                    and not action.emit_tokens_after
+                ):
+                    # A visible reply outside a text protocol is a candidate final answer.
+                    request = action.model_copy(update={"response_schema": schema.schema})
                 response = await call_model(
-                    action,
+                    request,
                     state.messages,
                     ctx,
                     streaming and action.visible,
                     events,
                     pending_tokens,
+                    calls,
                 )
             except UnsupportedToolsError as exc:
                 if ctx.tool_mode != "native" or not ctx.tools or not action.use_tools:
@@ -215,6 +226,8 @@ async def execute(
                     state.scratch["structured_output"] = True
                 if resolve_mode is not None:
                     ctx.tool_mode = await resolve_mode()
+                calls = ModelCalls(ctx)
+                ctx.constrained = (await calls.capabilities(ctx.model)).json_schema
                 await prepare_knowledge(state, ctx, events, retrievers, knowledge_mode)
                 text, usage, validated = await _actions(
                     state,
@@ -226,6 +239,7 @@ async def execute(
                     retrievers,
                     knowledge_mode,
                     schema,
+                    calls,
                 )
                 if memory is not None:
                     turn = [

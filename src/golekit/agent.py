@@ -238,6 +238,7 @@ class Agent:
             report_error=report_error,
             downgrade=self._binding.downgrade,
             approver=self._approval,
+            capabilities=self._binding.capabilities,
         )
         return await execute(
             input,

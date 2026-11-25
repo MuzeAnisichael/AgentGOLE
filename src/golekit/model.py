@@ -25,6 +25,7 @@ class _Binding:
         self.client = client
         self.mode: ToolMode = mode
         self.rejected_tools = False
+        self.rejected_schema = False
         self._probe: Future[Capabilities | None] | None = None
         self._lock = Lock()
 
@@ -51,10 +52,19 @@ class _Binding:
                     raise
             caps = await asyncio.shield(asyncio.wrap_future(pending))
             if caps is not None:
-                return caps.model_copy(update={"tools": False} if self.rejected_tools else {})
+                rejected: dict[str, bool] = {}
+                if self.rejected_tools:
+                    rejected["tools"] = False
+                if self.rejected_schema:
+                    rejected["json_schema"] = False
+                return caps.model_copy(update=rejected)
 
-    def downgrade(self) -> None:
-        self.rejected_tools = True
+    def downgrade(self, feature: str = "tools") -> None:
+        """Remember that the server rejected native tools or JSON Schema responses."""
+        if feature == "json_schema":
+            self.rejected_schema = True
+        else:
+            self.rejected_tools = True
 
     async def resolve_mode(self, override: ToolMode | None) -> ResolvedMode:
         if self.rejected_tools:
@@ -66,7 +76,11 @@ class _Binding:
 
 
 class Model:
-    """Configure an OpenAI-compatible provider or a model alias."""
+    """Configure an OpenAI-compatible provider or a model alias.
+
+    ``constrained`` controls JSON Schema constrained decoding: ``None`` follows the
+    provider default, ``True`` or ``False`` forces it on or off.
+    """
 
     def __init__(
         self,
@@ -79,6 +93,7 @@ class Model:
         timeout: float = 60.0,
         retries: int = 2,
         tool_mode: ToolMode = "auto",
+        constrained: bool | None = None,
     ) -> None:
         _check_mode(tool_mode)
         client = create_client(
@@ -90,6 +105,7 @@ class Model:
             max_tokens=max_tokens,
             timeout=timeout,
             retries=retries,
+            constrained=constrained,
         )
         self._binding = _Binding(client, tool_mode)
 
