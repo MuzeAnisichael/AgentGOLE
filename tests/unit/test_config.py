@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from agentgole.config import default_model, load_config
-from agentgole.errors import ConfigError
+from golekit.config import default_model, load_config
+from golekit.errors import ConfigError
 
 
 @pytest.fixture
@@ -59,7 +59,7 @@ def test_optional_unset_key_and_unknown_fields(project, monkeypatch, caplog):
         "engine: native\nextra_feature: enabled\n"
         "providers:\n  deepseek:\n    api_key: ${GOLE_TEST_ABSENT}"
     )
-    with caplog.at_level(logging.WARNING, logger="agentgole.config"):
+    with caplog.at_level(logging.WARNING, logger="golekit.config"):
         assert load_config() == {"engine": "native", "providers": {"deepseek": {"api_key": ""}}}
     assert len(caplog.records) == 1 and "extra_feature" in caplog.text
 

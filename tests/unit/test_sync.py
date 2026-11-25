@@ -4,7 +4,7 @@ from contextlib import closing
 
 import pytest
 
-from agentgole._sync import iter_sync, run_sync
+from golekit._sync import iter_sync, run_sync
 
 
 async def identity():

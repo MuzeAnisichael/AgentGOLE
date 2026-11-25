@@ -67,7 +67,7 @@ class Agent:
 只列本版本新增的目录和关键文件。
 
 ```text
-src/agentgole/
+src/golekit/
 ├── kernel/engine.py   # 新增
 └── ...
 ```

@@ -1,4 +1,4 @@
-# AgentGOLE 开发计划与路线图（v0.1 → v1.0）
+# GoleKit 开发计划与路线图（v0.1 → v1.0）
 
 > 本文件导出自项目文档「开发计划与路线图」页（2026-11-12）。版本范围以本文为准；每个版本开工前，会另外下发 `docs/tasks/v0.X.md` 任务书，任务书里的细节优先于本文。
 
@@ -20,14 +20,14 @@
 仓库采用 `src/` 布局，每个模块对应使用文档里的一类组件；右侧标注的是该模块在哪个版本引入。v0.1 只建 `config`、`protocols`、`kernel`、`models`、`tools`、`paradigms`、`memory`、`trace`、`cli` 九个目录（外加 `_sync.py`、`errors.py`、`testing/`），其余目录到对应版本再建。
 
 ```text
-agentgole/
+golekit/
 ├── pyproject.toml              # 核心依赖 httpx / pydantic / pyyaml；extras: rag, mcp, mem0, llamaindex, langgraph, litellm, otel, all
 ├── Makefile                    # make check（唯一的本地/CI 检查入口）
 ├── AGENTS.md                   # 编码 Agent 的工作规则（必读）
 ├── README.md · README.zh.md · CHANGELOG.md · LICENSE (Apache-2.0) · NOTICE
 ├── docs/                       # SPEC.md · DEV_PLAN.md · DEV_GUIDE.md · REPORT_TEMPLATE.md · tasks/
 ├── reports/                    # 每个版本一份阶段报告
-├── src/agentgole/
+├── src/golekit/
 │   ├── __init__.py             # 公共 API 出口：Agent, Model, Embedding, tool, mcp, Knowledge, prompt, Team, register ...
 │   ├── agent.py                # 公共 API：Agent、Result                               v0.1
 │   ├── model.py                # 公共 API：Model（包装 models/ 中的客户端）              v0.1
@@ -38,7 +38,7 @@ agentgole/
 │   ├── protocols/              # 公开协议：ModelClient · Tool · Paradigm · Memory · Retriever · Engine
 │   ├── kernel/                 # 原生内核（NanoHarness 六关注点）
 │   │   ├── engine.py           #   执行：异步运行循环、Run、Action                     v0.1
-│   │   ├── context.py          #   上下文：组装、token 预算、压缩                       v0.1 / v0.8
+│   │   ├── context.py          #   上下文：组装、长度告警、token 预算、压缩             v0.1 / v0.3 / v0.8
 │   │   ├── state.py            #   状态：检查点存储（SQLite / JSON）                   v0.5
 │   │   ├── events.py           #   生命周期：事件总线、Hook                             v0.1
 │   │   ├── middleware.py       #   中间件链                                              v0.6
@@ -52,7 +52,7 @@ agentgole/
 │   ├── team/                   # router · supervisor · handoff · debate                 v0.5
 │   ├── backends/               # 模式 B 适配器：litellm · mem0 · llamaindex · chroma · qdrant ...  v0.4
 │   ├── engines/                # 模式 C：native · langgraph ...；能力矩阵               v0.7
-│   ├── trace/                  # 终端步骤树 · JSON · HTML · OTel / Langfuse 导出         v0.1 / v0.8
+│   ├── trace/                  # 终端步骤树 · JSON · HTML · OTel / Langfuse 导出         v0.1 / v0.3 / v0.8
 │   ├── safety/                 # 审批 · 沙箱 · 预算 · 注入防护                           v0.3 / v0.8
 │   ├── serve/                  # ASGI：OpenAI 兼容端点、/runs + SSE                     v0.6
 │   ├── registry.py             # 字符串 → 组件；entry points 插件发现                   v0.4 / v0.6
@@ -69,7 +69,7 @@ agentgole/
 模块依赖规则（v0.4 起在 CI 里用 import-linter 一类工具强制检查，之前靠评审）：
 
 - `protocols/` 不依赖任何其他模块；`kernel/` 只依赖 `protocols/`。
-- `backends/` 和 `engines/` 只依赖 `protocols/` 与公共 API；第三方库一律在函数内懒加载，`import agentgole` 不得触发任何 extras 的导入。
+- `backends/` 和 `engines/` 只依赖 `protocols/` 与公共 API；第三方库一律在函数内懒加载，`import golekit` 不得触发任何 extras 的导入。
 - 组件之间不互相导入：Agent 通过 `registry` 按字符串解析组件，这是 `backend=`、`engine=` 和插件能工作的前提。
 
 ## 3. 路线图总览
@@ -142,12 +142,15 @@ agentgole/
 
 目标：多步任务可规划、可自检；小模型工具调用有数据支撑。
 
+- [ ] v0.2 审核遗留修复 R1–R7（见 `reports/v0.2-review.md`）
 - [ ] `paradigms/`：`direct`、`plan_execute`（含重规划）、`reflect`（评审轮数与标准）
 - [ ] 多模型分工：范式、记忆可各自指定模型
-- [ ] `safety/approval`：`confirm=True`、`approval.Console` / `Callback`、`approval_required` 事件
+- [ ] `safety/approval`：`confirm=True`、`approval.Console` / `Callback`、`approval_required` 事件；审批写成工具调用拦截链的一环（D-310）
 - [ ] 内置工具补齐：`web_search`、`web_fetch`、`python`（子进程沙箱）、`files`、`shell`
 - [ ] 降级第二阶段：接入约束解码（Ollama 结构化输出、vLLM guided decoding、llama.cpp GBNF）
-- [ ] `benchmarks/tool_calling`：小模型工具调用成功率基准，结果写进文档
+- [ ] `benchmarks/tool_calling`：小模型工具调用成功率基准，结果写进文档；跑出的真实坏输出收进降级解析的语料测试（D-312）
+- [ ] 上下文长度最小版：可配置、接近上限时告警、`gole doctor` 显示（D-309）；压缩仍在 v0.8
+- [ ] `trace.to_json` 与 `GOLE_TRACE_DIR`（D-311，从 v0.8 提前）
 
 **验收**：L3 示例跑通；基准覆盖至少 3 个本地模型 × native / prompt 两种模式，结果公开。
 
@@ -161,6 +164,9 @@ agentgole/
 
 目标：`backend=` 一个参数切换实现，行为一致由协议测试保证。
 
+- [ ] 模式 C 映射的抛弃式验证（D-010）：在定稿协议测试之前，用一到两天把一个带工具的 Agent 和一个两步流程手工映射到 LangGraph，逐项检查 D-301 的 token 语义、D-304 的默认拒绝、结构化输出纠正、prompt 降级能否对应。产出是一页结论，写明哪些能映射、哪些要列进能力矩阵的「不支持」；代码不合入
+- [ ] 内核整形（D-011）：把运行循环改成可序列化、可逐步推进的 `Run`，模型调用和工具调用都经过同一条拦截链；对外行为不变，由现有单元测试守住。v0.5 的检查点、v0.6 的中间件与手动驱动、v0.7 的引擎都建立在它之上
+- [ ] `user=`（D-012）：`run` 等四个入口增加可选的 `user=`，默认等于 `session`；长期记忆按 `user` 归属，会话记忆仍按 `session`
 - [ ] `registry.py`：字符串 → 组件解析、懒加载，缺依赖时提示安装命令
 - [ ] `tests/conformance/`：`ModelClient`、`Tool`、`Memory`、`Retriever` 协议测试套件，内置实现先全部通过
 - [ ] `backends/`：LiteLLM（模型）、mem0（长期记忆）、LlamaIndex（知识库，含 `Knowledge.from_llamaindex`）
@@ -184,12 +190,12 @@ agentgole/
 
 ### v0.6 内核开放与服务化（L5）
 
-目标：开发者能以 AgentGOLE 为内核做扩展和部署。
+目标：开发者能以 GoleKit 为内核做扩展和部署。
 
 - [ ] `protocols/` 定稿并写成文档；`Action` 补齐 `Delegate`、`AskHuman`
 - [ ] `kernel/middleware.py`：`Retry`、`TokenBudget`、`Cache`、`PIIMask`；`@agent.middleware`
 - [ ] 手动驱动：`agent.start()` 逐步迭代，`execute` / `reject`
-- [ ] 插件机制：`gole.register` + entry points（`agentgole.plugins`），附一个示例插件包
+- [ ] 插件机制：`gole.register` + entry points（`golekit.plugins`），附一个示例插件包
 - [ ] 序列化：`agent.save` / `Agent.load`（YAML，不含密钥）
 - [ ] `serve/`：`gole serve`（OpenAI 兼容 `/v1/chat/completions`、`/runs` + SSE、`/health`）与 `gole.asgi`
 
@@ -206,7 +212,7 @@ agentgole/
 目标：`engine="langgraph"` 下，同一段业务代码交给 LangGraph 运行。
 
 - [ ] `engines/`：`Engine` 协议、能力矩阵、`EngineCapabilityError`、`gole engines`
-- [ ] `engines/langgraph`：Agent 与 Workflow 映射为 LangGraph 图；工具、记忆映射；回调桥接为 AgentGOLE 事件
+- [ ] `engines/langgraph`：Agent 与 Workflow 映射为 LangGraph 图；工具、记忆映射；回调桥接为 GoleKit 事件
 - [ ] `flow.compile("langgraph")` 与 `agent.native`
 - [ ] `tests/crossmode/`：同一套 Cookbook 用例在 A / B / C 三种模式下运行
 
@@ -216,9 +222,9 @@ agentgole/
 
 目标：长时间、无人值守地运行，也要可追溯、可控制。
 
-- [ ] `trace/`：`to_json` / `to_html`、`gole trace`、OpenTelemetry 与 Langfuse 导出
+- [ ] `trace/`：`to_html`、`gole trace`、OpenTelemetry 与 Langfuse 导出（`to_json` 已在 v0.3 提供）
 - [ ] `safety/`：`python` 工具的 Docker 沙箱、提示词注入防护标记、`Webhook` 审批
-- [ ] `kernel/context.py`：上下文预算，长工具结果换成摘要 + 引用，早期对话压缩
+- [ ] `kernel/context.py`：上下文预算，长工具结果换成摘要 + 引用，早期对话压缩（v0.3 已有上下文长度配置和告警）
 - [ ] 并发工具调用、超时与取消
 - [ ] 故障注入测试：工具超时、进程中断、模型返回坏 JSON
 
@@ -260,8 +266,8 @@ agentgole/
 质量门槛：
 
 - `make check` = ruff + pyright（`protocols/`、`kernel/` 用严格模式）+ 单元测试 + 内置实现的协议测试，本地和 CI 是同一条命令。
-- CI：PR 只跑 Linux + Python 3.11；合入 main 时跑 Linux、macOS、Windows × {3.11、当前最新稳定版} 的矩阵。
-- 覆盖率只观察、不追求：v0.9 起才把 `protocols/`、`kernel/` 覆盖率 ≥ 90% 作为门槛，之前不为凑覆盖率写测试。
+- CI：PR 跑 Linux 和 Windows + Python 3.11（D-013）；合入 main 时跑 Linux、macOS、Windows × {3.11、当前最新稳定版} 的矩阵。
+- 覆盖率只观察、不追求：v0.9 起才把 `protocols/`、`kernel/` 覆盖率 ≥ 90% 作为门槛，之前不为凑覆盖率写测试。降级解析的语料测试是例外，样本数量不设上限（D-013）。
 - 每个 PR 带测试和 CHANGELOG 条目；改动公共 API 时，在阶段报告里列出，由审核方同步更新 SPEC。
 
 发布流程：

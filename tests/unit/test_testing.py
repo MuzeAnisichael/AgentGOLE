@@ -2,8 +2,8 @@
 
 import pytest
 
-from agentgole.protocols.types import Message
-from agentgole.testing import FakeModel, fake_tool_call
+from golekit.protocols.types import Message
+from golekit.testing import FakeModel, fake_tool_call
 
 
 async def test_scripted_calls_keep_a_snapshot_and_fail_when_exhausted():
@@ -25,3 +25,16 @@ async def test_stream_emits_deltas_then_a_complete_reply():
     assert "".join(chunk.text for chunk in chunks) == "scripted text"
     assert chunks[-1].response and chunks[-1].response.message.content == "scripted text"
     assert not (await model.probe()).tools
+
+
+async def test_embedding_batches_are_reproducible_and_tokens_handle_mixed_text():
+    from golekit.kernel.context import estimate_tokens
+    from golekit.testing import FakeEmbedding
+
+    model = FakeEmbedding(7)
+    batch = await model.embed(["上海", "notes"])
+    assert batch[0] == (await FakeEmbedding(7).embed(["上海"]))[0]
+    assert len(batch[0]) == 7 and batch[0] != batch[1]
+    assert model.calls == [["上海", "notes"]]
+    assert estimate_tokens("会议notes") == 4
+    assert estimate_tokens("😊😊😊😊") == 1

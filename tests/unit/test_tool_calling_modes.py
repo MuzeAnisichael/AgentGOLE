@@ -2,9 +2,9 @@
 
 import pytest
 
-import agentgole as gole
-from agentgole.errors import UnsupportedToolsError
-from agentgole.testing import FakeModel, fake_tool_call
+import golekit as gole
+from golekit.errors import UnsupportedToolsError
+from golekit.testing import FakeModel, fake_tool_call
 
 
 @gole.tool
@@ -47,7 +47,7 @@ async def test_server_rejection_persists_on_shared_model(monkeypatch):
             return await super().generate(messages, tools=tools, **params)
 
     fake = RejectingModel(["Final Answer:one", "Final Answer:two"])
-    monkeypatch.setattr("agentgole.model.create_client", lambda *args, **kwargs: fake)
+    monkeypatch.setattr("golekit.model.create_client", lambda *args, **kwargs: fake)
     shared = gole.Model("ollama/demo")
     agent = gole.Agent(shared, tools=[weather])
     result = await agent.arun("one")
@@ -55,3 +55,32 @@ async def test_server_rejection_persists_on_shared_model(monkeypatch):
     assert any(e.type == "error" and e.recoverable for e in result.trace.events)
     assert (await gole.Agent(shared, tools=[weather]).arun("two")).text == "two"
     assert fake.rejects == 1 and not shared.capabilities.tools
+
+
+@pytest.mark.parametrize("prefix", ["", "begin"])
+async def test_direct_stream_completes_missing_deltas(prefix):
+    from golekit.protocols.types import ModelChunk
+
+    class Partial(FakeModel):
+        async def stream(self, messages, **kwargs):
+            if prefix:
+                yield ModelChunk(text=prefix)
+            yield ModelChunk(response=await self.generate(messages, **kwargs))
+
+    events = [event async for event in gole.Agent(Partial(["begin end"])).astream("hello")]
+    assert (
+        "".join(event.text for event in events if event.type == "token") == events[-1].result.text
+    )
+    if prefix:
+        assert next(i for i, e in enumerate(events) if e.type == "token") < next(
+            i for i, e in enumerate(events) if e.type == "model_end"
+        )
+
+
+async def test_marked_prompt_answer_arrives_before_model_end():
+    model = FakeModel(["Thought: done\nFinal Answer:  first  second  "])
+    agent = gole.Agent(model, tools=[weather], tool_mode="prompt")
+    events = [event async for event in agent.astream("weather")]
+    end = next(i for i, e in enumerate(events) if e.type == "model_end")
+    assert "".join(e.text for e in events[:end] if e.type == "token") == "first  second"
+    assert events[-1].result.text == "first  second"

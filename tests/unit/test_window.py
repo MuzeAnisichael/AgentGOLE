@@ -1,5 +1,5 @@
-from agentgole.memory import Window
-from agentgole.protocols.types import Message
+from golekit.memory import Window
+from golekit.protocols.types import Message
 
 
 def turn(value: str) -> list[Message]:
