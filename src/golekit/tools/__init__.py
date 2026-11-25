@@ -10,8 +10,9 @@ from .builtins import calculator, current_datetime
 from .files import files
 from .function import FunctionTool, tool
 from .system import python, shell
+from .web import web_fetch, web_search
 
-__all__ = ["files", "python", "resolve_tools", "shell", "tool"]
+__all__ = ["files", "python", "resolve_tools", "shell", "tool", "web_fetch", "web_search"]
 
 _DEFAULT_TIMEOUT = 30
 
@@ -39,7 +40,12 @@ def resolve_tools(tools: Iterable[str | Tool | Iterable[Tool]]) -> dict[str, Too
     """Resolve built-in names, flatten tool lists and index tools by their public name."""
     builtins: dict[str, Tool] = {"calculator": calculator, "datetime": current_datetime}
     # Configurable tools are built on demand so a missing key only matters when they are used.
-    factories: dict[str, Callable[[], Tool]] = {"python": python, "shell": shell}
+    factories: dict[str, Callable[[], Tool]] = {
+        "python": python,
+        "shell": shell,
+        "web_fetch": web_fetch,
+        "web_search": web_search,
+    }
     resolved: dict[str, Tool] = {}
     for entry in tools:
         group = [entry] if isinstance(entry, (str, Tool)) else list(entry)
